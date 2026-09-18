@@ -14,8 +14,8 @@
   };
 
   const EMOJI = ["🌵", "🍄", "🌸", "🍀", "🌙", "⭐", "☁️", "🔥", "💧", "🍋", "🥑", "🪨", "🌷", "🌻", "🌼", "🌱", "🌿", "🍁", "🍂", "🍃", "🌾", "🌳", "🌲", "🌴", "🌰", "🍇", "🍈", "🍉", "🍊", "🍌", "🍍", "🥭", "🍎", "🍏", "🍐", "🍑", "🍒", "🍓", "🫐", "🥝", "🍅", "🥥", "🍆", "🥔", "🥕", "🌽", "🫑", "🥒", "🥬", "🥦", "🧄", "🧅", "🥜", "🍞", "🥐", "🥖", "🥨", "🥯", "🥞", "🧇", "🧀", "🍕", "🍿", "🍙", "🍚", "🍡", "🍦", "🍧", "🍨", "🍩", "🍪", "🎂", "🧁", "🍫", "🍬", "🍭", "🧊", "🧶", "🧵", "🧩", "🪁", "🫧", "❄️", "🌈"];
-  // Kangxi Radical Unicode characters only: human, mouth, mountain, fire, water, tree, heart, hand, sun, moon, earth, field, power, gate.
-  const RADICALS = ["⼈", "⼝", "⼭", "⽕", "⽔", "⽊", "⼼", "⼿", "⽇", "⽉", "⼟", "⽥", "⼒", "⾨"];
+  // The complete Kangxi Radicals block: U+2F00 through U+2FD5, all 214 radicals.
+  const RADICALS = Array.from({ length: 214 }, (_, index) => String.fromCodePoint(0x2F00 + index));
   // Semantic advantages, not arbitrary colour matchups. Unlisted emoji and
   // abstract radicals are neutral; this is a game rule, not language instruction.
   const AFFINITIES = {
@@ -42,14 +42,16 @@
     "⼈": "#55706b", "⼝": "#9b4e74", "⼒": "#8a4f9e", "⾨": "#53606b"
   };
   const affinity = emoji => Object.entries(AFFINITIES).find(([, group]) => group.emoji.includes(emoji))?.[0] || "neutral";
-  const counters = emoji => RADICALS.filter(radical => RADICAL_INFO[radical].counters.includes(affinity(emoji)));
+  const counters = emoji => RADICALS.filter(radical => (RADICAL_INFO[radical]?.counters || []).includes(affinity(emoji)));
   const damageMultiplier = (emoji, radical) => RADICAL_INFO[radical]?.counters.includes(affinity(emoji)) ? 2.5 : 1;
+  const radicalLabel = radical => RADICAL_INFO[radical]?.name || `radical ${String(RADICALS.indexOf(radical) + 1).padStart(3, "0")}`;
   const NAMES = ["Wobble", "Pip", "Sprig", "Mochi", "Bumble", "Peep", "Noodle", "Midge", "Tumble", "Bean", "Doodle", "Fizz"];
   const COLORS = ["#ffd47e", "#ffad91", "#a8d9a1", "#9bcaf2", "#d8b7ec", "#f6acc5"];
   const STORAGE_KEY = "radical-rascals-evolution-v1";
   const GARDEN_ROWS = 1, GARDEN_COLUMNS = 16, GARDEN_TOP = .72, GARDEN_BOTTOM = .94;
   const GARDEN_CAPACITY = GARDEN_ROWS * GARDEN_COLUMNS;
   const SPARK_CAP = 12;
+  const MAX_LEVEL = 300;
   const VICTORY_DURATION = 3.2;
   const GENES = ["power", "defence", "speed", "life", "range", "wobble", "bounce", "eyeSize", "eyeGap"];
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -72,7 +74,7 @@
     return {
       wave: 1, health: 10, sparks: 3, nectar: 0, shovelMode: false, generation: memory.generation || 1, score: 0,
       friends: [], enemies: [], particles: [], projectiles: [], nectarDrops: [], offers: [],
-      spawnLeft: 5, spawnTimer: 2, wavePause: 0, celebrating: false, over: false, started: false, paused: false, time: 0
+      spawnLeft: 5, spawnTimer: 2, wavePause: 0, celebrating: false, complete: false, over: false, started: false, paused: false, time: 0
     };
   }
 
@@ -223,6 +225,13 @@
     if (state.wavePause > 0) {
       state.wavePause -= dt;
       if (state.wavePause <= 0) {
+        if (state.wave >= MAX_LEVEL) {
+          state.complete = true; state.over = true;
+          ui.victoryCaption.textContent = `All ${MAX_LEVEL} levels won!`;
+          updateUI();
+          announce(`All ${MAX_LEVEL} levels complete!`);
+          return;
+        }
         state.celebrating = false; ui.victory.hidden = true;
         state.wave++;
         state.spawnLeft = 4 + state.wave * 2;
@@ -474,7 +483,7 @@
     ctx.font = `700 ${enemy.size}px "Fredoka", sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.fillStyle = enemy.hit > 0 ? "#ff6d4a" : (RADICAL_COLORS[enemy.char] || "#53606b"); ctx.fillText(enemy.char, 0, 0); ctx.restore();
     ctx.font = '500 9px "DM Mono", monospace'; ctx.textAlign = "center"; ctx.textBaseline = "top";
-    const label = (RADICAL_INFO[enemy.char]?.name || "radical").toUpperCase();
+    const label = radicalLabel(enemy.char).toUpperCase();
     const labelWidth = ctx.measureText(label).width + 8;
     const labelX = clamp(enemy.x, labelWidth / 2 + 2, width - labelWidth / 2 - 2);
     ctx.fillStyle = "rgba(255,253,247,.85)"; ctx.fillRect(labelX - labelWidth / 2, enemy.y + enemy.size * .52, labelWidth, 13);

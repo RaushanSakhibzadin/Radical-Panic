@@ -35,6 +35,7 @@ node --test tests/game.test.cjs
 - New friends choose a random free slot, so planting grows the garden organically instead of filling from left to right.
 - Each planted friend generates a floating Nectar drop every few seconds. Click a drop to collect it; each Nectar gives one Spark so the garden can keep growing.
 - Radical colours follow their meaning: water is blue, fire orange, trees green, mountains purple, earth brown, sun gold, and moon indigo.
+- The campaign has 300 levels. Every enemy is one of the 214 official Kangxi Radicals; radicals without a named counter use neutral damage and receive a numbered readable label.
 - Level 1 starts with one clearly marked planting line. Every defender has eyes, a mouth and expressions that react to danger, damage and attacks; preview faces reflect their mutation traits.
 - Winning a level triggers a giant, happy emoji celebration for about three seconds before the next level starts. Recruitment and losses do not trigger it. Reduced-motion mode shows a still celebration instead.
 - Friends shoot across roughly 300–490 pixels, depending on their inherited range gene, so they can engage radicals well before contact.

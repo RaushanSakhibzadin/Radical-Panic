@@ -29,7 +29,7 @@ function boot(saved, blocked = false) {
     localStorage: { getItem() { if (blocked) throw Error('Storage blocked'); return stored ?? null; }, setItem(_, value) { if (blocked) throw Error('Storage blocked'); stored = value; } },
     setTimeout() {}, clearTimeout() {}, requestAnimationFrame() {} });
   const source = fs.readFileSync(require.resolve('../game.js'), 'utf8').replace('start(); requestAnimationFrame(frame);',
-    'start(); globalThis.game = { get state() { return state; }, get memory() { return memory; }, selectOffer, randomGenome, chooseParent, rememberChoices, update, resize, draw, start, renderOffers, emotionFor, drawEmojiFace, EMOJI, RADICALS, RADICAL_COLORS, affinity, damageMultiplier };');
+    'start(); globalThis.game = { get state() { return state; }, get memory() { return memory; }, selectOffer, randomGenome, chooseParent, rememberChoices, update, resize, draw, start, renderOffers, emotionFor, drawEmojiFace, EMOJI, RADICALS, RADICAL_COLORS, MAX_LEVEL, affinity, damageMultiplier };');
   vm.runInContext(source, context);
   return { game: context.game, elements, context, drawnText, textStyles, stored: () => stored };
 }
@@ -188,11 +188,23 @@ test('radicals use meaning colours and remain visible across every radical type'
   const { game, elements, drawnText } = boot();
   for (const char of game.RADICALS) game.state.enemies.push({ char, x: 100, y: 100, size: 40, hp: 10, maxHp: 10, phase: 0, hit: 0 });
   game.draw();
-  assert.equal(game.RADICALS.length, 14);
+  assert.equal(game.RADICALS.length, 214);
+  assert.equal(new Set(game.RADICALS).size, 214);
   assert.equal(new Set(Object.values(game.RADICAL_COLORS)).size, 14);
   assert.ok(elements.get('#arena'));
   assert.ok(drawnText.some(([text]) => text === 'WATER'));
   assert.ok(drawnText.some(([text]) => text === 'FIRE'));
+});
+
+test('campaign ends cleanly after the 300th level win', () => {
+  const { game, elements } = boot(); game.selectOffer(game.state.offers[0]);
+  game.state.wave = game.MAX_LEVEL; game.state.spawnLeft = 0; game.state.enemies.length = 0;
+  game.update(.01);
+  assert.equal(game.state.wavePause > 0, true);
+  game.update(3.3);
+  assert.equal(game.state.complete, true);
+  assert.equal(game.state.over, true);
+  assert.equal(elements.get('#victory-caption').textContent, 'All 300 levels won!');
 });
 
 test('planted emoji use opaque ink even after fading particles were drawn', () => {
@@ -240,7 +252,7 @@ test('each attacker has a readable English label that stays inside a mobile canv
   elements.get('#arena').getBoundingClientRect = () => ({ width: 298, height: 440 }); game.resize();
   for (const char of game.RADICALS) game.state.enemies.push({ char, x: 5, y: 100, size: 40, hp: 10, maxHp: 10, phase: 0, hit: 0 });
   game.draw();
-  const labels = drawnText.filter(([text]) => /^[A-Z]+$/.test(text));
+  const labels = drawnText.filter(([text]) => /^[A-Z][A-Z0-9 ]+$/.test(text));
   assert.equal(labels.length, game.RADICALS.length);
   assert.ok(labels.some(([text]) => text === 'FIRE'));
   assert.ok(labels.some(([text]) => text === 'WATER'));
