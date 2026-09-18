@@ -336,6 +336,13 @@
     });
   }
 
+  // How large a planted friend is drawn. Nectar uses it too: the drops are fixed
+  // size otherwise, and on a phone they ended up bigger than the character that
+  // produced them.
+  function friendScale() {
+    return clamp(width / 21 / 48, .4, .78);
+  }
+
   function slotX(slot) {
     return width * (.08 + slot * (.84 / Math.max(1, GARDEN_COLUMNS - 1)));
   }
@@ -484,7 +491,12 @@
     for (let slot = 0; slot < GARDEN_CAPACITY; slot++) {
       if (state.friends.some(friend => friend.slot === slot)) continue;
       const x = slotX(slot);
-      ctx.fillStyle = "#ffffff70"; ctx.beginPath(); ctx.ellipse(x, plantingY + 27, 23, 7, 0, 0, Math.PI * 2); ctx.fill();
+      // Sixteen fixed-width markers ran into each other on a narrow canvas and read
+      // as one white smear. Size them to the gap they actually have.
+      const spacing = slotX(1) - slotX(0);
+      const markerX = Math.min(23, spacing * .42);
+      ctx.fillStyle = "#ffffff70"; ctx.beginPath();
+      ctx.ellipse(x, plantingY + 27, markerX, Math.max(3.5, markerX * .3), 0, 0, Math.PI * 2); ctx.fill();
     }
 
     labelBoxes.length = 0;
@@ -508,7 +520,7 @@
     const bounce = reducedMotion.matches ? 0 : Math.sin(friend.age * (2.5 + g.speed * 3)) * g.bounce * 7;
     const wobble = (reducedMotion.matches ? 0 : Math.sin(friend.age * 2 + friend.x) * g.wobble * .15) + g.tilt;
     ctx.save(); ctx.translate(friend.x, friend.y + bounce); ctx.rotate(wobble);
-    const emojiScale = clamp(width / 21 / 48, .4, .78); ctx.scale(emojiScale, emojiScale);
+    const emojiScale = friendScale(); ctx.scale(emojiScale, emojiScale);
     ctx.globalAlpha = 1;
     ctx.fillStyle = "rgba(23,34,28,.15)"; ctx.beginPath(); ctx.ellipse(0, 28 - bounce, 24, 7, 0, 0, Math.PI * 2); ctx.fill();
     drawEmojiFace(ctx, friend, emotionFor(friend), friend.blink < 0);
@@ -518,7 +530,8 @@
   }
 
   function drawNectar(drop) {
-    ctx.save(); ctx.translate(drop.x, drop.y); ctx.globalAlpha = clamp(drop.life, 0, 1);
+    ctx.save(); ctx.translate(drop.x, drop.y); ctx.scale(friendScale(), friendScale());
+    ctx.globalAlpha = clamp(drop.life, 0, 1);
     ctx.fillStyle = "#f4b942"; ctx.strokeStyle = "#17221c"; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(0, -10); ctx.bezierCurveTo(10, -2, 8, 8, 0, 11); ctx.bezierCurveTo(-8, 8, -10, -2, 0, -10); ctx.fill(); ctx.stroke();
     ctx.fillStyle = "#fff7c2"; ctx.beginPath(); ctx.arc(-3, -3, 2, 0, Math.PI * 2); ctx.fill();
