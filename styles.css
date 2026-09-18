@@ -151,13 +151,17 @@ footer a { color: inherit; }
 
 @media (max-width: 850px) {
   .run-stats div { min-width: 60px; padding-inline: 8px; }
-  .game-layout { grid-template-columns: 1fr; }
+  .game-layout { grid-template-columns: 1fr; min-height: 0; }
   /* Stacked, the mutation tray sat entirely below the arena, so you could not watch
      the battle while choosing. Pinning the arena keeps both on screen.
      `overflow: hidden` on the parent would trap the sticky element inside that box,
      so the rounding moves onto the arena itself while stacked. */
   .game-layout { overflow: visible; }
-  .arena-wrap { position: sticky; top: 0; z-index: 4; min-height: 46vh; border-right: 0; border-bottom: 2px solid var(--ink); background: #d9e7d0; border-radius: 20px 20px 0 0; }
+  /* Stacked, the field is portrait rather than the squat letterbox it used to be:
+     taller than it is wide, so radicals have a real descent to watch and the phone
+     layout matches the shape of the screen. Capped in vh so the mutation tray is
+     still reachable underneath the sticky arena. */
+  .arena-wrap { position: sticky; top: 0; z-index: 4; min-height: 0; height: min(62vh, 148vw); border-right: 0; border-bottom: 2px solid var(--ink); background: #d9e7d0; border-radius: 20px 20px 0 0; }
   .arena-wrap canvas { border-radius: 20px 20px 0 0; }
   .lab { border-radius: 0 0 20px 20px; }
   .lab { min-height: 560px; }
@@ -170,7 +174,7 @@ footer a { color: inherit; }
   .brand { order: 1; }.header-actions { order: 2; }.run-stats { order: 3; width: 100%; }.run-stats div { flex: 1; }
   .header-actions { gap: 5px; }.donate-button { padding: 0 10px; }.pause-button { padding: 0 8px; }
   .game-layout { box-shadow: 5px 6px 0 var(--ink); }
-  .arena-wrap { min-height: 42vh; }
+  .arena-wrap { height: min(60vh, 150vw); }
   .lab { min-height: 550px; padding: 22px; }
   footer { gap: 20px; }
 }
