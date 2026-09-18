@@ -503,22 +503,35 @@ test('winning a level unplants the garden immediately, not after the celebration
   assert.equal(elements.get('#victory-caption').textContent, 'Level 1 won!');
 });
 
-test('planting during the celebration carries over and starts the next level at once', () => {
-  const { game } = boot();
+test('the tray is locked while the victory character is on screen', () => {
+  const { game, elements } = boot();
   game.state.sparks = 8;
   game.selectOffer(game.state.offers[0]);
   game.state.spawnLeft = 0; game.state.enemies.length = 0;
   game.update(.01);
+  assert.equal(game.state.celebrating, true);
   assert.equal(game.state.friends.length, 0);
 
-  // Draft early, while the victory banner is still up.
+  // Recruiting between levels used to plant into the level that had just been won.
+  const sparks = game.state.sparks;
   game.selectOffer(game.state.offers[0]);
-  assert.equal(game.state.friends.length, 1);
+  assert.equal(game.state.friends.length, 0, 'nothing may be planted mid-celebration');
+  assert.equal(game.state.sparks, sparks, 'and no spark may be spent');
 
+  // The cards and the shuffle button say so, rather than silently doing nothing.
+  assert.ok(elements.get('#choices').children.every(button => button.disabled));
+  assert.equal(elements.get('#reroll').disabled, true);
+  const shuffled = game.state.offers.map(offer => offer.id);
+  elements.get('#reroll').events.click();
+  assert.deepEqual(game.state.offers.map(offer => offer.id), shuffled, 'shuffle is locked too');
+
+  // Once the celebration is over the tray reopens and the level waits to be planted.
   game.update(3.3);
   assert.equal(game.state.wave, 2);
-  assert.equal(game.state.friends.length, 1, 'an early draft must not be thrown away');
-  assert.equal(game.state.started, true, 'already planted, so the level runs straight away');
-  game.update(3);
-  assert.ok(game.state.enemies.length > 0);
+  assert.equal(game.state.celebrating, false);
+  assert.equal(game.state.started, false);
+  assert.ok(elements.get('#choices').children.some(button => !button.disabled));
+  game.selectOffer(game.state.offers[0]);
+  assert.equal(game.state.friends.length, 1);
+  assert.equal(game.state.started, true);
 });
