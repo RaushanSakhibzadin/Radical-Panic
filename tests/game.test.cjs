@@ -288,7 +288,10 @@ test('giant celebration plays only on a level win, pauses safely, and ends befor
   assert.equal(victory.hidden, false);
   assert.equal(elements.get('#victory-caption').textContent, 'Level 1 won!');
   assert.equal(game.state.celebrating, true);
-  assert.equal(game.emotionFor(game.state.friends[0]), 'joy');
+  // The garden is unplanted the moment the level is won, so there is no friend
+  // left on the field; the celebration's own character is what wears the grin.
+  assert.equal(game.state.friends.length, 0);
+  assert.equal(game.emotionFor({ genome: {}, hp: 1, maxHp: 1, attackFace: 0, hurtFace: 0 }), 'joy');
   game.state.paused = true; game.update(5);
   assert.equal(game.state.wave, 1);
   game.state.paused = false; context.document.hidden = true; game.update(5);
@@ -475,4 +478,47 @@ test('the spark allowance keeps pace with the level so a wiped garden is replant
       `level ${game.state.wave} granted only ${game.state.sparks} sparks`);
     assert.ok(game.state.sparks <= 16);
   }
+});
+
+test('winning a level unplants the garden immediately, not after the celebration', () => {
+  const { game, elements } = boot();
+  game.state.sparks = 8;
+  game.selectOffer(game.state.offers[0]);
+  game.selectOffer(game.state.offers[0]);
+  game.state.projectiles.push({ x: 0, y: 0, target: null, speed: 1, damage: 1, multiplier: 1, color: '#fff' });
+  game.state.nectarDrops.push({ x: 0, y: 0, baseY: 0, age: 0, life: 12, color: '#fff' });
+  assert.equal(game.state.friends.length, 2);
+
+  game.state.spawnLeft = 0; game.state.enemies.length = 0;
+  game.update(.01);
+
+  // Mid-celebration: the level is still on screen, but the garden is already gone.
+  assert.equal(game.state.celebrating, true);
+  assert.equal(game.state.wave, 1, 'still showing the level that was just won');
+  assert.equal(game.state.friends.length, 0, 'the garden unplants on the win');
+  assert.equal(game.state.projectiles.length, 0);
+  assert.equal(game.state.nectarDrops.length, 0);
+  assert.equal(game.state.shovelMode, false);
+  // The celebration still names the level it belongs to.
+  assert.equal(elements.get('#victory-caption').textContent, 'Level 1 won!');
+});
+
+test('planting during the celebration carries over and starts the next level at once', () => {
+  const { game } = boot();
+  game.state.sparks = 8;
+  game.selectOffer(game.state.offers[0]);
+  game.state.spawnLeft = 0; game.state.enemies.length = 0;
+  game.update(.01);
+  assert.equal(game.state.friends.length, 0);
+
+  // Draft early, while the victory banner is still up.
+  game.selectOffer(game.state.offers[0]);
+  assert.equal(game.state.friends.length, 1);
+
+  game.update(3.3);
+  assert.equal(game.state.wave, 2);
+  assert.equal(game.state.friends.length, 1, 'an early draft must not be thrown away');
+  assert.equal(game.state.started, true, 'already planted, so the level runs straight away');
+  game.update(3);
+  assert.ok(game.state.enemies.length > 0);
 });
