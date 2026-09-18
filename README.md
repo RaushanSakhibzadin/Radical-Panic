@@ -31,8 +31,9 @@ node --test tests/game.test.cjs
 - Each mutation changes attack, defence, attack speed, HP, range, bounce, wobble, eye size, and eye spacing. Animated previews show the personality before recruitment.
 - Defeat incoming Kangxi radical characters before they reach the garden.
 - Meaning-based counters deal **2.5× damage**: water quenches fire, fire burns trees, plants absorb water, cold freezes water, and more. Each candidate shows its strong matchups; open **Meaning matters** for the complete rules. Neutral matchups deal normal damage.
-- The garden has exactly three horizontal rows, with four friend slots per row, on every screen size.
-- Radicals attack friends on contact. Defence reduces incoming damage; friends with no HP leave a free slot for another recruit. The garden holds 12 friends.
+- The garden has one horizontal row with four friend slots on every screen size.
+- Friends shoot across roughly 300–490 pixels, depending on their inherited range gene, so they can engage radicals well before contact.
+- Radicals attack friends on contact. Defence reduces incoming damage; friends with no HP leave a free slot for another recruit. The garden holds four friends.
 - Survive a wave to earn two sparks. Every seventh defeated radical also drops one.
 - Selected lineages gain fitness and are more likely to return with small mutations.
 - Only mutations offered alongside a deliberate pick or shuffle are counted as skipped. Skipped lineages lose a little fitness. A 23% chance of a completely new lineage keeps the population varied.

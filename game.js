@@ -40,7 +40,8 @@
   const NAMES = ["Wobble", "Pip", "Sprig", "Mochi", "Bumble", "Peep", "Noodle", "Midge", "Tumble", "Bean", "Doodle", "Fizz"];
   const COLORS = ["#ffd47e", "#ffad91", "#a8d9a1", "#9bcaf2", "#d8b7ec", "#f6acc5"];
   const STORAGE_KEY = "radical-rascals-evolution-v1";
-  const GARDEN_ROWS = 3, GARDEN_COLUMNS = 4, GARDEN_TOP = .49, GARDEN_BOTTOM = .94;
+  const GARDEN_ROWS = 1, GARDEN_COLUMNS = 4, GARDEN_TOP = .72, GARDEN_BOTTOM = .94;
+  const GARDEN_CAPACITY = GARDEN_ROWS * GARDEN_COLUMNS;
   const GENES = ["power", "defence", "speed", "life", "range", "wobble", "bounce", "eyeSize", "eyeGap"];
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
@@ -131,7 +132,7 @@
       const button = document.createElement("button");
       button.className = "choice";
       button.type = "button";
-      button.disabled = state.over || state.sparks < 1 || state.friends.length >= 12;
+      button.disabled = state.over || state.sparks < 1 || state.friends.length >= GARDEN_CAPACITY;
       button.style.setProperty("--specimen-bg", offer.color);
       button.style.setProperty("--tilt", `${offer.genome.tilt}rad`);
       button.style.setProperty("--eye-size", `${7 + offer.genome.eyeSize * 6}px`);
@@ -154,7 +155,7 @@
   }
 
   function selectOffer(offer) {
-    if (state.sparks < 1 || state.over || state.friends.length >= 12 || !state.offers.includes(offer)) return;
+    if (state.sparks < 1 || state.over || state.friends.length >= GARDEN_CAPACITY || !state.offers.includes(offer)) return;
     state.sparks--;
     state.started = true;
     state.generation++;
@@ -182,7 +183,7 @@
   function addFriend(offer) {
     const g = offer.genome;
     const columns = GARDEN_COLUMNS;
-    const slot = Array.from({ length: 12 }, (_, i) => i).find(i => !state.friends.some(f => f.slot === i));
+    const slot = Array.from({ length: GARDEN_CAPACITY }, (_, i) => i).find(i => !state.friends.some(f => f.slot === i));
     const col = slot % columns;
     const row = Math.floor(slot / columns);
     state.friends.push({
@@ -232,7 +233,7 @@
       friend.cooldown -= dt;
       friend.blink -= dt;
       if (friend.blink < -.12) friend.blink = random(1.4, 4.8);
-      const range = 100 + friend.genome.range * 145;
+      const range = 280 + friend.genome.range * 220;
       let target = null, targetDist = Infinity;
       for (const enemy of state.enemies) {
         const distance = Math.hypot(enemy.x - friend.x, enemy.y - friend.y);
@@ -301,7 +302,7 @@
     const w = width, h = height;
     ctx.clearRect(0, 0, w, h);
     const gradient = ctx.createLinearGradient(0, 0, 0, h);
-    gradient.addColorStop(0, "#f2c9b1"); gradient.addColorStop(.48, "#f5e6c8"); gradient.addColorStop(.49, "#dbe9d2"); gradient.addColorStop(1, "#a9c99f");
+    gradient.addColorStop(0, "#f2c9b1"); gradient.addColorStop(GARDEN_TOP - .01, "#f5e6c8"); gradient.addColorStop(GARDEN_TOP, "#dbe9d2"); gradient.addColorStop(1, "#a9c99f");
     ctx.fillStyle = gradient; ctx.fillRect(0, 0, w, h);
     const laneHeight = h * (GARDEN_BOTTOM - GARDEN_TOP) / GARDEN_ROWS;
     for (let row = 0; row < GARDEN_ROWS; row++) {
@@ -334,7 +335,10 @@
     const bounce = reducedMotion.matches ? 0 : Math.sin(friend.age * (2.5 + g.speed * 3)) * g.bounce * 7;
     const wobble = (reducedMotion.matches ? 0 : Math.sin(friend.age * 2 + friend.x) * g.wobble * .15) + g.tilt;
     ctx.save(); ctx.translate(friend.x, friend.y + bounce); ctx.rotate(wobble);
+    ctx.globalAlpha = 1;
     ctx.fillStyle = "rgba(23,34,28,.15)"; ctx.beginPath(); ctx.ellipse(0, 28 - bounce, 24, 7, 0, 0, Math.PI * 2); ctx.fill();
+    // Colour emoji inherit fillStyle alpha in some canvas implementations.
+    ctx.fillStyle = "#17221c";
     ctx.font = '48px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif'; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(friend.emoji, 0, 0);
     const eyeSize = 5 + g.eyeSize * 5, gap = 4 + g.eyeGap * 9, blink = friend.blink < 0;
     for (const side of [-1, 1]) {

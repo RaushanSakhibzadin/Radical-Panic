@@ -8,8 +8,11 @@ const vm = require('node:vm');
 function boot(saved, blocked = false) {
   const elements = new Map();
   const drawnText = [];
-  const drawing = new Proxy({}, { get: (_, key) => key === 'createLinearGradient' ? () => ({ addColorStop() {} })
-    : key === 'measureText' ? text => ({ width: text.length * 6 }) : key === 'fillText' ? (...args) => drawnText.push(args) : () => {} });
+  const textStyles = [];
+  const drawing = new Proxy({ globalAlpha: 1 }, { get: (target, key) => key === 'createLinearGradient' ? () => ({ addColorStop() {} })
+    : key === 'measureText' ? text => ({ width: text.length * 6 }) : key === 'fillText' ? (...args) => {
+      drawnText.push(args); textStyles.push({ text: args[0], fillStyle: target.fillStyle, alpha: target.globalAlpha });
+    } : target[key] ?? (() => {}) });
   function element() {
     return { children: [], events: {}, style: { setProperty() {} }, classList: { add() {}, remove() {}, toggle() {} },
       replaceChildren() { this.children = []; }, append(child) { this.children.push(child); },
@@ -28,7 +31,7 @@ function boot(saved, blocked = false) {
   const source = fs.readFileSync(require.resolve('../game.js'), 'utf8').replace('start(); requestAnimationFrame(frame);',
     'start(); globalThis.game = { get state() { return state; }, get memory() { return memory; }, selectOffer, randomGenome, chooseParent, rememberChoices, update, resize, draw, start, EMOJI, RADICALS, affinity, damageMultiplier };');
   vm.runInContext(source, context);
-  return { game: context.game, elements, context, drawnText, stored: () => stored };
+  return { game: context.game, elements, context, drawnText, textStyles, stored: () => stored };
 }
 
 test('waits for first recruitment, then spends one spark and remembers all visible candidates', () => {
@@ -128,21 +131,45 @@ test('shuffling cannot spend the final spark before the first recruitment', () =
   assert.equal(game.state.friends.length, 1);
 });
 
-test('garden holds exactly three rows of four friends before and after mobile resize', () => {
+test('garden holds one row of four friends and rejects extra recruits before and after mobile resize', () => {
   const { game, elements } = boot(); game.state.sparks = 20;
-  for (let i = 0; i < 13; i++) game.selectOffer(game.state.offers[0]);
-  assert.equal(game.state.friends.length, 12);
+  for (let i = 0; i < 5; i++) game.selectOffer(game.state.offers[0]);
+  assert.equal(game.state.friends.length, 4);
+  assert.equal(game.state.sparks, 16);
+  assert.ok(elements.get('#choices').children.every(button => button.disabled));
   function checkRows(height) {
     const rows = [...new Set(game.state.friends.map(friend => friend.y))].sort((a, b) => a - b);
-    assert.equal(rows.length, 3);
-    rows.forEach((y, index) => {
-      assert.equal(game.state.friends.filter(friend => friend.y === y).length, 4);
-      assert.ok(Math.abs(y / height - (.49 + (index + .5) * .15)) < .000001);
-    });
+    assert.equal(rows.length, 1);
+    assert.equal(new Set(game.state.friends.map(friend => friend.x)).size, 4);
+    assert.ok(Math.abs(rows[0] / height - .83) < .000001);
   }
   checkRows(610);
   elements.get('#arena').getBoundingClientRect = () => ({ width: 368, height: 440 }); game.resize();
   checkRows(440);
+});
+
+test('planted emoji use opaque ink even after fading particles were drawn', () => {
+  const { game, textStyles } = boot(); game.selectOffer(game.state.offers[0]);
+  const emoji = game.state.friends[0].emoji;
+  game.state.particles.push({ x: 10, y: 10, size: 3, life: .1, color: '#ffffff' });
+  game.draw(); game.draw();
+  const specimens = textStyles.filter(item => item.text === emoji);
+  assert.equal(specimens.length, 2);
+  assert.ok(specimens.every(item => item.alpha === 1 && item.fillStyle === '#17221c'));
+});
+
+test('friends shoot past the old maximum range while inherited range still limits targeting', () => {
+  function firesAt(distance, rangeGene) {
+    const { game } = boot(); game.selectOffer(game.state.offers[0]);
+    const friend = game.state.friends[0]; friend.genome.range = rangeGene; friend.cooldown = 0;
+    game.state.enemies.push({ char: '⽕', x: friend.x, y: friend.y - distance, hp: 1000, maxHp: 1000, phase: 0, hit: 0, speed: 0, drift: 0 });
+    game.update(.01);
+    return game.state.projectiles.length > 0;
+  }
+  assert.equal(firesAt(285, .08), true);
+  assert.equal(firesAt(420, .08), false);
+  assert.equal(firesAt(420, .95), true);
+  assert.equal(firesAt(510, .95), false);
 });
 
 test('semantic counters apply to real projectiles: water rapidly defeats fire, neutral matchups stay normal', () => {
