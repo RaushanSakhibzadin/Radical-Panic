@@ -227,6 +227,11 @@
     };
   }
 
+  // The tray is closed while the victory character is on screen. Recruiting then
+  // planted into a level that had already been won, which read as a bug: the big
+  // emoji is a curtain between levels, not part of either one.
+  const trayLocked = () => state.over || state.celebrating || state.wavePause > 0;
+
   function refillOffers() {
     // Draw three genuinely different candidates. Weighted sampling happily returns
     // the same favourite lineage three times, which is a non-choice: the tray is
@@ -249,7 +254,7 @@
       const button = document.createElement("button");
       button.className = "choice";
       button.type = "button";
-      button.disabled = state.over || state.sparks < 1 || state.friends.length >= GARDEN_CAPACITY;
+      button.disabled = trayLocked() || state.sparks < 1 || state.friends.length >= GARDEN_CAPACITY;
       button.style.setProperty("--specimen-bg", offer.color);
       button.style.setProperty("--tilt", `${offer.genome.tilt}rad`);
       button.style.setProperty("--eye-size", `${7 + offer.genome.eyeSize * 6}px`);
@@ -297,7 +302,7 @@
   }
 
   function selectOffer(offer) {
-    if (state.sparks < 1 || state.over || state.friends.length >= GARDEN_CAPACITY || !state.offers.includes(offer)) return;
+    if (trayLocked() || state.sparks < 1 || state.friends.length >= GARDEN_CAPACITY || !state.offers.includes(offer)) return;
     state.sparks--;
     state.started = true;
     state.generation = Math.max(state.generation, (offer.depth || 0) + 1);
@@ -375,13 +380,11 @@
         }
         state.celebrating = false; ui.victory.hidden = true;
         state.wave++;
-        // The garden was already unplanted when the previous level was won, so
-        // there is nothing to clear here. Anything planted during the celebration
-        // is kept - the drafting window simply opened early - and in that case the
-        // level starts straight away instead of waiting.
-        // `started` gates the wave the same way it gates level 1: nothing spawns
-        // until something is planted, so you always get time to draft.
-        state.started = state.friends.length > 0;
+        // The garden was unplanted when the previous level was won and the tray was
+        // locked throughout the celebration, so the field is empty here by
+        // construction. `started` gates the wave the same way it gates level 1:
+        // nothing spawns until something is planted, so you always get time to draft.
+        state.started = false;
         state.sparks = Math.min(SPARK_CAP, Math.max(state.sparks, levelSparks(state.wave)));
         state.spawnLeft = 4 + state.wave * 2;
         state.spawnTimer = .4;
@@ -710,7 +713,7 @@
   function updateUI() {
     ui.wave.textContent = state.wave; ui.health.textContent = state.health; ui.sparks.textContent = state.sparks; ui.nectar.textContent = state.nectar;
     ui.best.textContent = memory.bestWave || 0; ui.generation.textContent = String(state.generation).padStart(2, "0");
-    ui.reroll.disabled = state.sparks < 1 || state.over || (!state.started && state.sparks === 1);
+    ui.reroll.disabled = trayLocked() || state.sparks < 1 || (!state.started && state.sparks === 1);
     ui.shovel.disabled = state.over || state.friends.length === 0;
     ui.shovel.setAttribute("aria-pressed", String(state.shovelMode));
     ui.pause.disabled = state.over || !state.started;
@@ -749,7 +752,7 @@
     announce("Choose your first friend");
   }
 
-  ui.reroll.addEventListener("click", () => { if (state.sparks < 1 || state.over || (!state.started && state.sparks === 1)) return; state.sparks--; rememberChoices(null); refillOffers(); updateUI(); tone(350, .05); });
+  ui.reroll.addEventListener("click", () => { if (trayLocked() || state.sparks < 1 || (!state.started && state.sparks === 1)) return; state.sparks--; rememberChoices(null); refillOffers(); updateUI(); tone(350, .05); });
   ui.shovel.addEventListener("click", () => { if (state.over || state.friends.length === 0) return; state.shovelMode = !state.shovelMode; updateUI(); announce(state.shovelMode ? "Pick a friend to dig up" : "Shovel put away"); });
   ui.pause.addEventListener("click", () => { if (state.over || !state.started) return; state.paused = !state.paused; updateUI(); announce(state.paused ? "Garden paused" : "Here come the radicals!"); });
   ui.forget.addEventListener("click", () => { memory = { lineages: [], generation: 1, bestWave: 0 }; saveMemory(); start(); announce("Evolutionary memory cleared"); });
