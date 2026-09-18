@@ -29,7 +29,7 @@ function boot(saved, blocked = false) {
     localStorage: { getItem() { if (blocked) throw Error('Storage blocked'); return stored ?? null; }, setItem(_, value) { if (blocked) throw Error('Storage blocked'); stored = value; } },
     setTimeout() {}, clearTimeout() {}, requestAnimationFrame() {} });
   const source = fs.readFileSync(require.resolve('../game.js'), 'utf8').replace('start(); requestAnimationFrame(frame);',
-    'start(); globalThis.game = { get state() { return state; }, get memory() { return memory; }, selectOffer, randomGenome, chooseParent, rememberChoices, update, resize, draw, start, EMOJI, RADICALS, affinity, damageMultiplier };');
+    'start(); globalThis.game = { get state() { return state; }, get memory() { return memory; }, selectOffer, randomGenome, chooseParent, rememberChoices, update, resize, draw, start, renderOffers, emotionFor, drawEmojiFace, EMOJI, RADICALS, affinity, damageMultiplier };');
   vm.runInContext(source, context);
   return { game: context.game, elements, context, drawnText, textStyles, stored: () => stored };
 }
@@ -198,4 +198,64 @@ test('each attacker has a readable English label that stays inside a mobile canv
   assert.ok(labels.some(([text]) => text === 'FIRE'));
   assert.ok(labels.some(([text]) => text === 'WATER'));
   for (const [text, x, y] of labels) { assert.ok(x >= text.length * 3); assert.ok(x <= 298 - text.length * 3); assert.ok(y > 100); }
+});
+
+test('giant celebration plays only on a level win, pauses safely, and ends before the next level', () => {
+  const { game, elements, context } = boot();
+  const victory = elements.get('#victory');
+  game.selectOffer(game.state.offers[0]);
+  assert.equal(victory.hidden, true, 'Recruitment must not trigger a giant animation');
+  game.state.spawnLeft = 0;
+  game.state.enemies.push({ char: '⽕', x: 350, y: 0, hp: 1000, phase: 0, speed: 0, drift: 0 });
+  game.update(.01);
+  assert.equal(victory.hidden, true, 'The last enemy must be defeated first');
+  game.state.enemies.length = 0;
+  game.update(.01);
+  assert.equal(victory.hidden, false);
+  assert.equal(elements.get('#victory-caption').textContent, 'Level 1 won!');
+  assert.equal(game.state.celebrating, true);
+  assert.equal(game.emotionFor(game.state.friends[0]), 'joy');
+  game.state.paused = true; game.update(5);
+  assert.equal(game.state.wave, 1);
+  game.state.paused = false; context.document.hidden = true; game.update(5);
+  assert.equal(game.state.wave, 1);
+  context.document.hidden = false; game.update(3.3);
+  assert.equal(victory.hidden, true);
+  assert.equal(game.state.celebrating, false);
+  assert.equal(game.state.wave, 2);
+  assert.match(elements.get('#garden-label').textContent, /Level 2 · one planting line/);
+  game.state.spawnLeft = 0; game.state.enemies.length = 0; game.update(.01);
+  assert.equal(elements.get('#victory-caption').textContent, 'Level 2 won!');
+  game.start();
+  assert.equal(victory.hidden, true);
+  assert.equal(game.state.wave, 1);
+  game.selectOffer(game.state.offers[0]); game.state.health = 1;
+  game.state.enemies.push({ char: '⽕', x: 24, y: 610, hp: 100, phase: 0, speed: 0, drift: 0 });
+  game.update(.01);
+  assert.equal(game.state.over, true);
+  assert.equal(victory.hidden, true, 'Losing must not trigger a victory animation');
+});
+
+test('all emoji have preview mouths and react to attacks, nearby enemies, and low HP', () => {
+  const { game, elements } = boot();
+  const offer = game.state.offers[0];
+  for (const emoji of game.EMOJI) {
+    offer.emoji = emoji; game.renderOffers();
+    const markup = elements.get('#choices').children[0].innerHTML;
+    assert.match(markup, /mini-mouth/);
+    assert.match(markup, /data-emotion="(happy|curious|determined)"/);
+    for (const mood of ['happy', 'curious', 'determined', 'scared', 'hurt', 'joy']) {
+      let mouthCurves = 0;
+      const pen = new Proxy({}, { get: (_, key) => ['ellipse', 'rect', 'quadraticCurveTo'].includes(key) ? () => mouthCurves++ : () => {} });
+      game.drawEmojiFace(pen, offer, mood);
+      assert.ok(mouthCurves >= 3, `${emoji} needs eyes and a mouth for ${mood}`);
+    }
+  }
+  game.selectOffer(offer); const friend = game.state.friends[0];
+  friend.attackFace = .3; assert.equal(game.emotionFor(friend), 'determined');
+  friend.attackFace = 0; friend.hurtFace = .4; assert.equal(game.emotionFor(friend), 'hurt');
+  friend.hurtFace = 0; friend.hp = 1; assert.equal(game.emotionFor(friend), 'scared');
+  friend.hp = friend.maxHp;
+  game.state.enemies.push({ x: friend.x, y: friend.y - 80 });
+  assert.equal(game.emotionFor(friend), 'scared');
 });

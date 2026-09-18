@@ -8,7 +8,9 @@
     best: document.querySelector("#best-wave"), choices: document.querySelector("#choices"), generation: document.querySelector("#generation"),
     reroll: document.querySelector("#reroll"), forget: document.querySelector("#forget"), sound: document.querySelector("#sound-toggle"),
     message: document.querySelector("#message"), gameOver: document.querySelector("#game-over"), finalWave: document.querySelector("#final-wave"),
-    playAgain: document.querySelector("#play-again"), pause: document.querySelector("#pause"), memoryStatus: document.querySelector("#memory-status")
+    playAgain: document.querySelector("#play-again"), pause: document.querySelector("#pause"), memoryStatus: document.querySelector("#memory-status"),
+    gardenLabel: document.querySelector("#garden-label"), victory: document.querySelector("#victory"),
+    victoryEmoji: document.querySelector("#victory-emoji"), victoryCaption: document.querySelector("#victory-caption")
   };
 
   const EMOJI = ["🌵", "🍄", "🌸", "🍀", "🌙", "⭐", "☁️", "🔥", "💧", "🍋", "🥑", "🪨", "🌷", "🌻", "🌼", "🌱", "🌿", "🍁", "🍂", "🍃", "🌾", "🌳", "🌲", "🌴", "🌰", "🍇", "🍈", "🍉", "🍊", "🍌", "🍍", "🥭", "🍎", "🍏", "🍐", "🍑", "🍒", "🍓", "🫐", "🥝", "🍅", "🥥", "🍆", "🥔", "🥕", "🌽", "🫑", "🥒", "🥬", "🥦", "🧄", "🧅", "🥜", "🍞", "🥐", "🥖", "🥨", "🥯", "🥞", "🧇", "🧀", "🍕", "🍿", "🍙", "🍚", "🍡", "🍦", "🍧", "🍨", "🍩", "🍪", "🎂", "🧁", "🍫", "🍬", "🍭", "🧊", "🧶", "🧵", "🧩", "🪁", "🫧", "❄️", "🌈"];
@@ -42,6 +44,7 @@
   const STORAGE_KEY = "radical-rascals-evolution-v1";
   const GARDEN_ROWS = 1, GARDEN_COLUMNS = 4, GARDEN_TOP = .72, GARDEN_BOTTOM = .94;
   const GARDEN_CAPACITY = GARDEN_ROWS * GARDEN_COLUMNS;
+  const VICTORY_DURATION = 3.2;
   const GENES = ["power", "defence", "speed", "life", "range", "wobble", "bounce", "eyeSize", "eyeGap"];
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
@@ -63,7 +66,7 @@
     return {
       wave: 1, health: 10, sparks: 3, generation: memory.generation || 1, score: 0,
       friends: [], enemies: [], particles: [], projectiles: [], offers: [],
-      spawnLeft: 5, spawnTimer: 2, wavePause: 0, over: false, started: false, paused: false, time: 0
+      spawnLeft: 5, spawnTimer: 2, wavePause: 0, celebrating: false, over: false, started: false, paused: false, time: 0
     };
   }
 
@@ -141,10 +144,11 @@
       button.style.setProperty("--wobble", `${offer.genome.wobble * .15}rad`);
       button.style.setProperty("--tempo", `${2 * Math.PI / (2.5 + offer.genome.speed * 3)}s`);
       const advantages = counters(offer.emoji);
+      const mood = previewEmotion(offer);
       const matchup = advantages.length ? `2.5× vs ${advantages.join(" ")}` : "Steady vs all radicals";
       button.setAttribute("aria-label", `${offer.name}, ${offer.emoji}. Attack ${Math.round(4 + offer.genome.power * 12)}, defence ${Math.round(offer.genome.defence * 65)}%, HP ${Math.round(35 + offer.genome.life * 80)}, speed ${(1 / (1.15 - offer.genome.speed * .72)).toFixed(1)} attacks per second. ${advantages.length ? `2.5 times damage against ${advantages.map(char => RADICAL_INFO[char].name).join(', ')}.` : 'Normal damage against all radicals.'} Recruit for 1 spark.`);
       button.innerHTML = `
-        <span class="specimen"><span>${offer.emoji}</span><span class="mini-eyes"><i></i><i></i></span></span>
+        <span class="specimen" data-emotion="${mood}"><span>${offer.emoji}</span><span class="mini-eyes"><i></i><i></i></span><span class="mini-mouth"></span></span>
         <span class="choice-copy"><strong>${offer.name}</strong><small>mutation ${String(state.generation).padStart(2, "0")}.${index + 1}</small>
           <span class="bars"><span class="bar" title="Attack"><i style="width:${offer.genome.power * 100}%"></i></span><span class="bar" title="Speed"><i style="width:${offer.genome.speed * 100}%"></i></span><span class="bar" title="HP"><i style="width:${offer.genome.life * 100}%"></i></span><span class="bar" title="Defence"><i style="width:${offer.genome.defence * 100}%"></i></span></span>
           <span class="matchup">${matchup}</span>
@@ -188,7 +192,7 @@
     const row = Math.floor(slot / columns);
     state.friends.push({
       ...offer, slot, x: width * (.16 + col * .23), y: height * (GARDEN_TOP + (row + .5) * (GARDEN_BOTTOM - GARDEN_TOP) / GARDEN_ROWS),
-      hp: 35 + g.life * 80, maxHp: 35 + g.life * 80, cooldown: random(0, .7), age: random(0, 10), blink: random(1, 4)
+      hp: 35 + g.life * 80, maxHp: 35 + g.life * 80, cooldown: random(0, .7), age: random(0, 10), blink: random(1, 4), attackFace: 0, hurtFace: 0
     });
   }
 
@@ -208,11 +212,12 @@
     if (state.wavePause > 0) {
       state.wavePause -= dt;
       if (state.wavePause <= 0) {
+        state.celebrating = false; ui.victory.hidden = true;
         state.wave++;
         state.spawnLeft = 4 + state.wave * 2;
         state.spawnTimer = .4;
         updateUI();
-        announce(`Wave ${state.wave} is rustling…`);
+        announce(`Level ${state.wave} is rustling…`);
       }
     } else if (state.spawnLeft > 0) {
       state.spawnTimer -= dt;
@@ -220,7 +225,8 @@
         spawnEnemy(); state.spawnLeft--; state.spawnTimer = Math.max(.35, 1.18 - state.wave * .035);
       }
     } else if (!state.enemies.length) {
-      state.wavePause = 2.2;
+      state.wavePause = VICTORY_DURATION;
+      celebrateLevel();
       state.sparks = Math.min(6, state.sparks + 2);
       memory.bestWave = Math.max(memory.bestWave || 0, state.wave);
       saveMemory(); updateUI(); renderOffers();
@@ -230,6 +236,8 @@
 
     for (const friend of state.friends) {
       friend.age += dt;
+      friend.attackFace = Math.max(0, (friend.attackFace || 0) - dt);
+      friend.hurtFace = Math.max(0, (friend.hurtFace || 0) - dt);
       friend.cooldown -= dt;
       friend.blink -= dt;
       if (friend.blink < -.12) friend.blink = random(1.4, 4.8);
@@ -240,6 +248,7 @@
         if (distance < range && distance < targetDist) { target = enemy; targetDist = distance; }
       }
       if (target && friend.cooldown <= 0) {
+        friend.attackFace = .3;
         const travel = 145 + friend.genome.speed * 190;
         const multiplier = damageMultiplier(friend.emoji, target.char);
         state.projectiles.push({ x: friend.x, y: friend.y - 12, target, speed: travel, damage: (4 + friend.genome.power * 12) * multiplier, multiplier, color: friend.color });
@@ -267,6 +276,7 @@
       enemy.phase += dt * 2; enemy.hit -= dt; enemy.counterHit = Math.max(0, (enemy.counterHit || 0) - dt);
       const defender = state.friends.find(friend => Math.hypot(friend.x - enemy.x, friend.y - enemy.y) < 42);
       if (defender) {
+        defender.hurtFace = .4;
         defender.hp -= (10 + state.wave * 2) * (1 - defender.genome.defence * .65) * dt;
         if (defender.hp <= 0) {
           state.friends.splice(state.friends.indexOf(defender), 1);
@@ -304,17 +314,15 @@
     const gradient = ctx.createLinearGradient(0, 0, 0, h);
     gradient.addColorStop(0, "#f2c9b1"); gradient.addColorStop(GARDEN_TOP - .01, "#f5e6c8"); gradient.addColorStop(GARDEN_TOP, "#dbe9d2"); gradient.addColorStop(1, "#a9c99f");
     ctx.fillStyle = gradient; ctx.fillRect(0, 0, w, h);
-    const laneHeight = h * (GARDEN_BOTTOM - GARDEN_TOP) / GARDEN_ROWS;
-    for (let row = 0; row < GARDEN_ROWS; row++) {
-      const top = h * GARDEN_TOP + row * laneHeight;
-      ctx.fillStyle = row % 2 === 0 ? "rgba(255,253,247,.13)" : "rgba(23,34,28,.035)";
-      ctx.fillRect(0, top, w, laneHeight);
-      ctx.strokeStyle = "rgba(23,34,28,.19)"; ctx.lineWidth = 1; ctx.setLineDash([6, 8]);
-      ctx.beginPath(); ctx.moveTo(0, top); ctx.lineTo(w, top); ctx.stroke(); ctx.setLineDash([]);
-      ctx.fillStyle = "rgba(23,34,28,.3)"; ctx.font = '10px "DM Mono", monospace'; ctx.textAlign = "left";
-      ctx.fillText(String(row + 1).padStart(2, "0"), 10, top + laneHeight / 2);
+    // One planting rail, with four visible slots. No extra boundary/grid lines.
+    const plantingY = h * (GARDEN_TOP + GARDEN_BOTTOM) / 2;
+    ctx.strokeStyle = "#71966a"; ctx.lineWidth = 2; ctx.setLineDash([5, 7]);
+    ctx.beginPath(); ctx.moveTo(w * .07, plantingY + 27); ctx.lineTo(w * .93, plantingY + 27); ctx.stroke(); ctx.setLineDash([]);
+    for (let slot = 0; slot < GARDEN_CAPACITY; slot++) {
+      if (state.friends.some(friend => friend.slot === slot)) continue;
+      const x = w * (.16 + slot * .23);
+      ctx.fillStyle = "#ffffff70"; ctx.beginPath(); ctx.ellipse(x, plantingY + 27, 23, 7, 0, 0, Math.PI * 2); ctx.fill();
     }
-    ctx.strokeStyle = "rgba(23,34,28,.19)"; ctx.beginPath(); ctx.moveTo(0, h * GARDEN_BOTTOM); ctx.lineTo(w, h * GARDEN_BOTTOM); ctx.stroke();
 
     for (const friend of state.friends) drawFriend(friend);
     for (const enemy of state.enemies) drawEnemy(enemy);
@@ -337,18 +345,74 @@
     ctx.save(); ctx.translate(friend.x, friend.y + bounce); ctx.rotate(wobble);
     ctx.globalAlpha = 1;
     ctx.fillStyle = "rgba(23,34,28,.15)"; ctx.beginPath(); ctx.ellipse(0, 28 - bounce, 24, 7, 0, 0, Math.PI * 2); ctx.fill();
-    // Colour emoji inherit fillStyle alpha in some canvas implementations.
-    ctx.fillStyle = "#17221c";
-    ctx.font = '48px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif'; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(friend.emoji, 0, 0);
-    const eyeSize = 5 + g.eyeSize * 5, gap = 4 + g.eyeGap * 9, blink = friend.blink < 0;
-    for (const side of [-1, 1]) {
-      ctx.fillStyle = "white"; ctx.strokeStyle = "#17221c"; ctx.lineWidth = 1.3; ctx.beginPath();
-      ctx.ellipse(side * gap, -8, eyeSize, blink ? 1 : eyeSize * 1.18, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-      if (!blink) { ctx.fillStyle = "#17221c"; ctx.beginPath(); ctx.arc(side * gap, -6, 2.2, 0, Math.PI * 2); ctx.fill(); }
-    }
+    drawEmojiFace(ctx, friend, emotionFor(friend), friend.blink < 0);
     ctx.restore();
     ctx.fillStyle = "rgba(23,34,28,.2)"; ctx.fillRect(friend.x - 20, friend.y + 37, 40, 3);
     ctx.fillStyle = "#71b36a"; ctx.fillRect(friend.x - 20, friend.y + 37, 40 * clamp(friend.hp / friend.maxHp, 0, 1), 3);
+  }
+
+  function previewEmotion(friend) {
+    return friend.genome.power > .65 ? "determined" : friend.genome.bounce > .55 ? "happy" : "curious";
+  }
+
+  function emotionFor(friend) {
+    if (state.celebrating) return "joy";
+    if (friend.hurtFace > 0) return "hurt";
+    if (friend.hp < friend.maxHp * .35) return "scared";
+    if (friend.attackFace > 0) return "determined";
+    if (state.enemies.some(enemy => Math.hypot(friend.x - enemy.x, friend.y - enemy.y) < 110)) return "scared";
+    return previewEmotion(friend);
+  }
+
+  // Shared by planted defenders and the giant victory character; every emoji gets a full face.
+  function drawEmojiFace(pen, friend, emotion, blink = false) {
+    const g = friend.genome, scared = emotion === "scared", hurt = emotion === "hurt", joy = emotion === "joy";
+    pen.save(); pen.globalAlpha = 1;
+    pen.fillStyle = "#17221c";
+    pen.font = '48px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
+    pen.textAlign = "center"; pen.textBaseline = "middle"; pen.fillText(friend.emoji, 0, 0);
+    const eyeSize = (5 + g.eyeSize * 5) * (scared ? 1.15 : 1), gap = 4 + g.eyeGap * 9;
+    pen.lineCap = "round";
+    for (const side of [-1, 1]) {
+      pen.fillStyle = "white"; pen.strokeStyle = "#17221c"; pen.lineWidth = 1.3; pen.beginPath();
+      pen.ellipse(side * gap, -8, eyeSize, blink || hurt ? 1 : eyeSize * 1.18, 0, 0, Math.PI * 2); pen.fill(); pen.stroke();
+      if (!blink && !hurt) {
+        pen.fillStyle = "#17221c"; pen.beginPath();
+        if (joy) pen.arc(side * gap, -5, 3, Math.PI, Math.PI * 2);
+        else pen.arc(side * gap, -6, scared ? 1.6 : 2.2, 0, Math.PI * 2);
+        if (joy) pen.stroke(); else pen.fill();
+      }
+      const browY = -12 - eyeSize * 1.18;
+      pen.beginPath(); pen.moveTo(side * gap - 4, browY + (emotion === "determined" ? -side * 2 : 0));
+      pen.lineTo(side * gap + 4, browY + (emotion === "determined" ? side * 2 : scared ? -side * 2 : 0)); pen.stroke();
+      if (joy || emotion === "happy") {
+        pen.fillStyle = "#f78999"; pen.beginPath(); pen.ellipse(side * (gap + 5), 3, 4, 2, 0, 0, Math.PI * 2); pen.fill();
+      }
+    }
+    pen.strokeStyle = "#17221c"; pen.fillStyle = "#17221c"; pen.lineWidth = 1.5; pen.beginPath();
+    if (scared || emotion === "curious") {
+      pen.ellipse(0, 9, scared ? 4 : 2.5, scared ? 6 : 3.5, 0, 0, Math.PI * 2); pen.fill();
+    } else if (hurt) {
+      pen.moveTo(-6, 11); pen.quadraticCurveTo(0, 3, 6, 11); pen.stroke();
+    } else if (emotion === "determined") {
+      pen.fillStyle = "white"; pen.rect(-6, 7, 12, 5); pen.fill(); pen.stroke();
+    } else {
+      pen.moveTo(-7, 6); pen.lineTo(7, 6); pen.quadraticCurveTo(0, joy ? 25 : 20, -7, 6); pen.fill(); pen.stroke();
+      pen.fillStyle = "#ff879b"; pen.beginPath(); pen.ellipse(0, joy ? 13 : 11, 3, 2, 0, 0, Math.PI * 2); pen.fill();
+    }
+    pen.restore();
+  }
+
+  function celebrateLevel() {
+    state.celebrating = true;
+    const champion = state.friends.length ? pick(state.friends) : state.offers[0];
+    const pen = ui.victoryEmoji.getContext("2d");
+    pen.clearRect(0, 0, 600, 600);
+    pen.save(); pen.translate(300, 300);
+    pen.fillStyle = champion.color; pen.beginPath(); pen.arc(0, 0, 235, 0, Math.PI * 2); pen.fill();
+    pen.scale(8, 8); drawEmojiFace(pen, champion, "joy"); pen.restore();
+    ui.victoryCaption.textContent = `Level ${state.wave} won!`;
+    ui.victory.hidden = false;
   }
 
   function drawEnemy(enemy) {
@@ -386,6 +450,8 @@
     ui.pause.disabled = state.over || !state.started;
     ui.pause.textContent = state.paused ? "Resume" : "Pause";
     ui.pause.setAttribute("aria-pressed", String(state.paused));
+    ui.victory.classList.toggle("is-paused", state.paused || document.hidden);
+    ui.gardenLabel.textContent = `Level ${state.wave} · one planting line`;
     ui.memoryStatus.textContent = storageAvailable ? "Choices stay in this browser." : "Memory lasts for this session only.";
   }
 
@@ -411,7 +477,7 @@
   }
 
   function start() {
-    state = freshState(); ui.gameOver.hidden = true; refillOffers(); updateUI(); resize();
+    state = freshState(); ui.gameOver.hidden = true; ui.victory.hidden = true; refillOffers(); updateUI(); resize();
     announce("Choose your first friend");
   }
 
@@ -421,7 +487,7 @@
   ui.sound.addEventListener("click", () => { muted = !muted; ui.sound.classList.toggle("muted", muted); ui.sound.setAttribute("aria-label", muted ? "Turn sound on" : "Turn sound off"); if (!muted) tone(520, .06); });
   ui.playAgain.addEventListener("click", start);
   window.addEventListener("resize", resize);
-  document.addEventListener("visibilitychange", () => { lastTime = performance.now(); });
+  document.addEventListener("visibilitychange", () => { lastTime = performance.now(); updateUI(); });
 
   function frame(now) {
     const dt = Math.min((now - lastTime) / 1000, .035); lastTime = now; update(dt); draw(); requestAnimationFrame(frame);

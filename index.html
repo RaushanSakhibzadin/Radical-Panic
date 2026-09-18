@@ -14,7 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fredoka:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=20260918-faces-1" />
   </head>
   <body>
     <div class="noise" aria-hidden="true"></div>
@@ -25,7 +25,7 @@
           <span>Radical<br />Rascals</span>
         </a>
         <div class="run-stats" aria-label="Game statistics">
-          <div><span>Wave</span><strong id="wave">1</strong></div>
+          <div><span>Level</span><strong id="wave">1</strong></div>
           <div><span>Garden</span><strong id="garden-health">10</strong></div>
           <div><span>Sparks</span><strong id="sparks">3</strong></div>
           <div><span>Best</span><strong id="best-wave">0</strong></div>
@@ -51,11 +51,11 @@
         <div class="arena-wrap">
           <canvas id="arena" aria-label="Radical Rascals game arena">Choose friends from the mutation tray to defend the garden. Combat plays automatically.</canvas>
           <div class="arena-label top">The wild radicals</div>
-          <div class="arena-label bottom">Your odd little garden</div>
+          <div class="arena-label bottom" id="garden-label">Level 1 · one planting line</div>
           <div class="message" id="message" role="status"></div>
           <div class="game-over" id="game-over" hidden>
             <p class="eyebrow">The garden needs a nap</p>
-            <h2>Wave <span id="final-wave">1</span></h2>
+            <h2>Level <span id="final-wave">1</span></h2>
             <p>Your favourites are remembered. Their best quirks will return next run.</p>
             <button id="play-again" type="button">Grow again</button>
           </div>
@@ -98,6 +98,10 @@
         <a href="https://github.com/RaushanSakhibzadin/Radical-Panic" target="_blank" rel="noreferrer">View the source ↗</a>
       </footer>
     </main>
-    <script src="game.js"></script>
+    <div class="victory" id="victory" hidden role="status" aria-live="polite">
+      <canvas id="victory-emoji" width="600" height="600" aria-hidden="true"></canvas>
+      <p id="victory-caption"></p>
+    </div>
+    <script src="game.js?v=20260918-faces-1"></script>
   </body>
 </html>
