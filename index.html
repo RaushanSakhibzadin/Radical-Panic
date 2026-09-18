@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Radical Panic 偏旁大恐慌</title>
+<meta name="description" content="Chinese radicals attack a garden of eyeless emoji. Their faces, animations and stats are drawn from a genome that mutates every time you plant one — and your picks are the selection pressure.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text y='52' font-size='52'>🍓</text></svg>">
+<style>
+  :root {
+    --bg: #140d22;
+    --panel: #1f1533;
+    --panel-2: #291c42;
+    --ink: #f4ecff;
+    --muted: #a294bd;
+    --accent: #ffd7a8;
+    --good: #7bffb0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: radial-gradient(1200px 600px at 50% -10%, #2c1c47, var(--bg));
+    color: var(--ink);
+    font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1320px; margin: 0 auto; padding: 18px 16px 40px; }
+  header { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+  header h1 { font-size: 22px; margin: 0; letter-spacing: 0.01em; }
+  header h1 b { color: var(--accent); }
+  header .tag { color: var(--muted); font-size: 13px; }
+  header nav { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+  button {
+    background: var(--panel-2); color: var(--ink); border: 1px solid #3d2c5e;
+    border-radius: 9px; padding: 7px 12px; font: inherit; font-size: 13px; cursor: pointer;
+  }
+  button:hover { background: #35255491; border-color: #5b4388; }
+  a { color: var(--accent); }
+
+  .layout { display: grid; grid-template-columns: minmax(0,1fr) 288px; gap: 16px; align-items: start; }
+  @media (max-width: 1080px) { .layout { grid-template-columns: 1fr; } }
+
+  canvas#board {
+    width: 100%; height: auto; display: block;
+    border-radius: 14px; border: 1px solid #3d2c5e;
+    background: #1b1230; touch-action: none;
+  }
+
+  #hand { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 12px; }
+  .card {
+    background: var(--panel); border: 1px solid #3d2c5e; border-radius: 12px;
+    padding: 8px; cursor: pointer; transition: transform .12s, border-color .12s;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .card:hover { transform: translateY(-2px); border-color: #6b4fa5; }
+  .card.selected { border-color: var(--good); box-shadow: 0 0 0 2px #7bffb055; }
+  .card.poor { opacity: .55; }
+  .card-art { width: 100%; height: auto; display: block; }
+  .card-name { font-weight: 650; font-size: 14px; }
+  .card-gen { color: var(--muted); font-size: 11px; }
+  .card-stats { display: grid; gap: 2px; margin: 3px 0; }
+  .bar { display: grid; grid-template-columns: 34px 1fr; align-items: center; gap: 6px; font-size: 10px; color: var(--muted); }
+  .bar i { display: block; height: 5px; border-radius: 3px; background: var(--accent); }
+  .bar > i { grid-column: 2; }
+  .card-foot { display: flex; align-items: center; justify-content: space-between; margin-top: auto; }
+  .card-cost { font-size: 12px; color: #8ee7ff; font-weight: 650; }
+  .card-bin { padding: 2px 7px; font-size: 12px; line-height: 1.4; }
+
+  aside { background: var(--panel); border: 1px solid #3d2c5e; border-radius: 14px; padding: 14px; }
+  aside h3 { margin: 0 0 4px; font-size: 16px; }
+  aside h4 { margin: 14px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  aside p { margin: 4px 0; }
+  .drift .bar { grid-template-columns: 54px 1fr; font-size: 11px; }
+  .drift .bar i { height: 7px; background: linear-gradient(90deg,#7bffb0,#8ee7ff); }
+  .fav { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip { background: var(--panel-2); border-radius: 8px; padding: 3px 7px; font-size: 15px; }
+  .chip b { font-size: 10px; color: var(--muted); margin-left: 4px; font-weight: 600; }
+  .lines { margin: 0; padding-left: 18px; font-size: 12px; color: var(--muted); }
+  .lines .g { font-size: 15px; }
+
+  #help {
+    display: none; position: fixed; inset: 0; z-index: 20; padding: 24px;
+    background: rgba(10,5,20,.8); overflow: auto;
+  }
+  #help.open { display: block; }
+  #help .sheet {
+    max-width: 640px; margin: 4vh auto; background: var(--panel);
+    border: 1px solid #3d2c5e; border-radius: 16px; padding: 22px 24px;
+  }
+  #help h2 { margin-top: 0; }
+  #help li { margin: 6px 0; }
+  footer { margin-top: 22px; color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><b>偏旁大恐慌</b> Radical Panic</h1>
+    <span class="tag">the characters are coming for the fruit</span>
+    <nav>
+      <button id="btn-help">How to play</button>
+      <button id="btn-restart">Restart (R)</button>
+      <button id="btn-export">Export gene pool</button>
+      <button id="btn-import">Import</button>
+      <button id="btn-wipe">Wipe</button>
+      <input id="file-import" type="file" accept="application/json" hidden>
+    </nav>
+  </header>
+
+  <div class="layout">
+    <div>
+      <canvas id="board" width="950" height="596"></canvas>
+      <div id="hand"></div>
+    </div>
+    <aside id="evolution"></aside>
+  </div>
+
+  <footer>
+    Open source, MIT. It lives on donations, not ads or tracking — nothing you do
+    here leaves your browser. <a href="https://github.com/RaushanSakhibzadin/Radical-Panic">Source &amp; donate</a>.
+  </footer>
+</div>
+
+<div id="help">
+  <div class="sheet">
+    <h2>How to play</h2>
+    <ol>
+      <li>Kangxi radicals — 火 水 刀 鬼 龍 — march left across the field toward your bowls 🥣.</li>
+      <li>Pick a card from your hand (click, or keys <b>1</b>–<b>4</b>), then click a square to plant it. It costs 氣.</li>
+      <li>Planted emoji shoot down the lane on their own. Lose three bowls and it is over.</li>
+      <li>氣 regenerates by itself and every radical you fell pays a bounty.</li>
+    </ol>
+    <h2>Why it keeps changing</h2>
+    <p>Every card is an <b>individual</b>, not a type. It carries a genome: hp,
+    attack, defence, speed and range, plus how it bobs, sways and squashes, plus
+    the size of its eyes, the angle of its brows, how wide it smiles and how
+    often it blinks. Each card is its parent's genome with a small random
+    mutation, so no two are the same.</p>
+    <p><b>You are the selection pressure.</b> Planting a card tells the game that
+    lineage is worth keeping, and its mutations get passed on and offered more
+    often. Composting one (🗑, or <b>X</b>) says the opposite, and so does leaving
+    a card unplayed for a whole wave. Fitness fades a little every wave, so
+    yesterday's favourite must keep earning it.</p>
+    <p>None of the emoji have eyes of their own — every face you see is drawn
+    from that genome at runtime. Over an evening the roster drifts toward
+    whatever you personally find cute, funny or effective, and it stays that way:
+    the pool is saved in your browser and you can export it and trade it.</p>
+    <p class="muted small">Privacy: everything is local. No server, no account,
+    no analytics.</p>
+    <p><button id="help-close">Close</button></p>
+  </div>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
