@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Radical Rascals is a tiny evolutionary defence game about eyeless emoji and mischievous Chinese radicals."
+    />
+    <title>Radical Rascals</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fredoka:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="noise" aria-hidden="true"></div>
+    <main class="shell">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="Radical Rascals home">
+          <span class="brand-mark">⼼</span>
+          <span>Radical<br />Rascals</span>
+        </a>
+        <div class="run-stats" aria-label="Game statistics">
+          <div><span>Wave</span><strong id="wave">1</strong></div>
+          <div><span>Garden</span><strong id="garden-health">10</strong></div>
+          <div><span>Sparks</span><strong id="sparks">3</strong></div>
+          <div><span>Best</span><strong id="best-wave">0</strong></div>
+        </div>
+        <div class="header-actions">
+          <button class="sound-button" id="sound-toggle" type="button" aria-label="Toggle sound">♪</button>
+          <button class="pause-button" id="pause" type="button" aria-pressed="false">Pause</button>
+          <a class="donate-button" href="https://github.com/sponsors/RaushanSakhibzadin" target="_blank" rel="noreferrer">Support ↗</a>
+        </div>
+      </header>
+
+      <section class="hero">
+        <div>
+          <p class="eyebrow">A tiny game that learns what you love</p>
+          <h1>Give them eyes.<br /><em>Help them evolve.</em></h1>
+        </div>
+        <p class="intro">
+          Pick an eyeless friend. Every choice helps its funniest little mutations return. Protect your garden from waves of mischievous radicals.
+        </p>
+      </section>
+
+      <section class="game-layout">
+        <div class="arena-wrap">
+          <canvas id="arena" aria-label="Radical Rascals game arena">Choose friends from the mutation tray to defend the garden. Combat plays automatically.</canvas>
+          <div class="arena-label top">The wild radicals</div>
+          <div class="arena-label bottom">Your odd little garden</div>
+          <div class="message" id="message" role="status"></div>
+          <div class="game-over" id="game-over" hidden>
+            <p class="eyebrow">The garden needs a nap</p>
+            <h2>Wave <span id="final-wave">1</span></h2>
+            <p>Your favourites are remembered. Their best quirks will return next run.</p>
+            <button id="play-again" type="button">Grow again</button>
+          </div>
+        </div>
+
+        <aside class="lab">
+          <div class="lab-heading">
+            <div>
+              <p class="eyebrow">Mutation tray</p>
+              <h2>Choose a friend</h2>
+            </div>
+            <span class="generation">GEN <b id="generation">01</b></span>
+          </div>
+          <p class="hint">Recruit for 1 spark. Friends fight automatically. Your picks shape future generations; skipped mutations return less often.</p>
+          <div class="choices" id="choices"></div>
+          <button class="skip-button" id="reroll" type="button">Shuffle mutations <span>costs 1 spark</span></button>
+          <div class="legend">
+            <span><i class="dot coral"></i>Power</span>
+            <span><i class="dot blue"></i>Speed</span>
+            <span><i class="dot green"></i>HP</span>
+            <span><i class="dot purple"></i>Defence</span>
+          </div>
+          <details class="counter-guide">
+            <summary>Meaning matters · 2.5× counters</summary>
+            <p>Water quenches fire ⽕ and erodes mountains ⼭. Plants absorb water ⽔ and break through earth ⼟. Fire burns trees ⽊. Cold freezes water ⽔, cools fire ⽕, and frosts fields ⽥. Clouds shade the sun ⽇. Light outshines the moon ⽉.</p>
+            <p>All other matchups deal normal damage. These are playful game rules.</p>
+          </details>
+          <div class="memory">
+            <div>
+              <span class="memory-icon">↻</span>
+              <div><strong>The garden remembers</strong><small id="memory-status">Choices stay in this browser.</small></div>
+            </div>
+            <button id="forget" type="button" title="Reset evolutionary memory">Forget</button>
+          </div>
+        </aside>
+      </section>
+
+      <footer>
+        <p>Open source, mutation-powered, and made with no image assets.</p>
+        <a href="https://github.com/RaushanSakhibzadin/Radical-Panic" target="_blank" rel="noreferrer">View the source ↗</a>
+      </footer>
+    </main>
+    <script src="game.js"></script>
+  </body>
+</html>
