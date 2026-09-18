@@ -4,6 +4,10 @@ A tiny, open-source evolutionary defence game. Mischievous Chinese radicals drif
 
 Every choice matters. A selected mutation becomes more likely to parent future choices, while skipped lineages become less likely. The resulting evolutionary memory is stored only in the player's browser.
 
+**[Play Radical Rascals](https://raushansakhibzadin.github.io/Radical-Panic/)**
+
+GitHub Pages publishes the static game from the root of `main`. Pushing changes to that branch updates the live game; `.nojekyll` keeps publication free of Jekyll processing.
+
 ## Play locally
 
 No build step or dependencies are required.
