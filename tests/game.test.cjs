@@ -297,7 +297,11 @@ test('giant celebration plays only on a level win, pauses safely, and ends befor
   assert.equal(victory.hidden, true);
   assert.equal(game.state.celebrating, false);
   assert.equal(game.state.wave, 2);
-  assert.match(elements.get('#garden-label').textContent, /Level 2 · one planting line/);
+  // The new level waits for a fresh draft rather than carrying the garden over.
+  assert.match(elements.get('#garden-label').textContent, /Level 2 · choose your garden/);
+  // Level 2 starts empty and does not run until it is planted, so clearing it
+  // requires a garden first.
+  game.selectOffer(game.state.offers[0]);
   game.state.spawnLeft = 0; game.state.enemies.length = 0; game.update(.01);
   assert.equal(elements.get('#victory-caption').textContent, 'Level 2 won!');
   game.start();
@@ -423,5 +427,52 @@ test('the tray always offers a real choice, never the same lineage three times',
     assert.equal(species.size, 3, `round ${round} offered ${species.size} distinct emoji`);
     // Keep picking the same favourite; the tray must still show alternatives.
     game.selectOffer(game.state.offers[0]);
+  }
+});
+
+test('every level starts with an empty garden and waits for you to plant it', () => {
+  const { game } = boot();
+  game.state.sparks = 8;
+  game.selectOffer(game.state.offers[0]);
+  game.selectOffer(game.state.offers[0]);
+  assert.equal(game.state.friends.length, 2);
+  assert.equal(game.state.started, true);
+
+  // Clear the level.
+  game.state.spawnLeft = 0; game.state.enemies.length = 0;
+  game.update(.01);
+  assert.equal(game.state.celebrating, true);
+  game.update(3.3);
+
+  assert.equal(game.state.wave, 2);
+  assert.equal(game.state.friends.length, 0, 'the garden must not carry over');
+  assert.equal(game.state.started, false, 'the level must wait for a fresh draft');
+  assert.equal(game.state.shovelMode, false);
+
+  // Nothing may spawn, and no time may pass, while the player is still choosing.
+  const frozenAt = game.state.time;
+  game.update(30);
+  assert.equal(game.state.enemies.length, 0, 'no radical may arrive before you plant');
+  assert.equal(game.state.time, frozenAt, 'the level clock must not run while drafting');
+
+  // Planting starts the level.
+  game.selectOffer(game.state.offers[0]);
+  assert.equal(game.state.started, true);
+  game.update(3);
+  assert.ok(game.state.enemies.length > 0, 'the wave starts once the garden is planted');
+});
+
+test('the spark allowance keeps pace with the level so a wiped garden is replantable', () => {
+  const { game } = boot();
+  for (let level = 1; level < 14; level++) {
+    game.state.sparks = 0;                       // spend everything every level
+    game.state.friends.length = 0;
+    game.state.started = true;
+    game.state.spawnLeft = 0; game.state.enemies.length = 0;
+    game.update(.01); game.update(3.3);
+    assert.equal(game.state.wave, level + 1);
+    assert.ok(game.state.sparks >= Math.min(16, 2 + game.state.wave),
+      `level ${game.state.wave} granted only ${game.state.sparks} sparks`);
+    assert.ok(game.state.sparks <= 16);
   }
 });

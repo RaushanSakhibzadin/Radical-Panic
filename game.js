@@ -96,7 +96,10 @@
   const STORAGE_KEY = "radical-rascals-evolution-v1";
   const GARDEN_ROWS = 1, GARDEN_COLUMNS = 16, GARDEN_TOP = .72, GARDEN_BOTTOM = .94;
   const GARDEN_CAPACITY = GARDEN_ROWS * GARDEN_COLUMNS;
-  const SPARK_CAP = 12;
+  const SPARK_CAP = 16;   // one per garden slot, so a full garden is reachable
+  // Sparks you are guaranteed at the start of a level. The garden is wiped between
+  // levels, so this has to keep pace with how big a wave is about to arrive.
+  const levelSparks = wave => Math.min(SPARK_CAP, 2 + wave);
   const POOL_LIMIT = 60;            // total lineages remembered
   const LINEAGES_PER_EMOJI = 4;     // so >= POOL_LIMIT / 4 species always coexist
   const PICK_FITNESS = 1.6;         // fitness a freshly planted lineage enters with
@@ -372,10 +375,22 @@
         }
         state.celebrating = false; ui.victory.hidden = true;
         state.wave++;
+        // Every level is a fresh draft. The garden does not carry over, so you
+        // choose a whole team each time instead of planting once in level 1 and
+        // watching it run. More picks also means a stronger selection signal, which
+        // is the point of the whole game.
+        state.friends = [];
+        state.projectiles = [];
+        state.nectarDrops = [];
+        state.shovelMode = false;
+        // `started` gates the wave the same way it gates level 1: nothing spawns
+        // until you have planted something, so you always get time to draft.
+        state.started = false;
+        state.sparks = Math.min(SPARK_CAP, Math.max(state.sparks, levelSparks(state.wave)));
         state.spawnLeft = 4 + state.wave * 2;
         state.spawnTimer = .4;
-        updateUI();
-        announce(`Level ${state.wave} is rustling…`);
+        updateUI(); renderOffers();
+        announce(`Level ${state.wave} — plant a new garden`);
       }
     } else if (state.spawnLeft > 0) {
       state.spawnTimer -= dt;
@@ -699,7 +714,9 @@
     ui.pause.textContent = state.paused ? "Resume" : "Pause";
     ui.pause.setAttribute("aria-pressed", String(state.paused));
     ui.victory.classList.toggle("is-paused", state.paused || document.hidden);
-    ui.gardenLabel.textContent = `Level ${state.wave} · one planting line`;
+    ui.gardenLabel.textContent = state.started
+      ? `Level ${state.wave} · one planting line`
+      : `Level ${state.wave} · choose your garden`;
     ui.memoryStatus.textContent = storageAvailable ? "Choices stay in this browser." : "Memory lasts for this session only.";
   }
 
