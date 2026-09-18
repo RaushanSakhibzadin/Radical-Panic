@@ -131,21 +131,34 @@ test('shuffling cannot spend the final spark before the first recruitment', () =
   assert.equal(game.state.friends.length, 1);
 });
 
-test('garden holds one row of eight friends and rejects extra recruits before and after mobile resize', () => {
+test('garden holds one row of sixteen friends and rejects extra recruits before and after mobile resize', () => {
   const { game, elements } = boot(); game.state.sparks = 20;
-  for (let i = 0; i < 9; i++) game.selectOffer(game.state.offers[0]);
-  assert.equal(game.state.friends.length, 8);
-  assert.equal(game.state.sparks, 12);
+  for (let i = 0; i < 17; i++) game.selectOffer(game.state.offers[0]);
+  assert.equal(game.state.friends.length, 16);
+  assert.equal(game.state.sparks, 4);
   assert.ok(elements.get('#choices').children.every(button => button.disabled));
   function checkRows(height) {
     const rows = [...new Set(game.state.friends.map(friend => friend.y))].sort((a, b) => a - b);
     assert.equal(rows.length, 1);
-    assert.equal(new Set(game.state.friends.map(friend => friend.x)).size, 8);
+    assert.equal(new Set(game.state.friends.map(friend => friend.x)).size, 16);
     assert.ok(Math.abs(rows[0] / height - .83) < .000001);
   }
   checkRows(610);
   elements.get('#arena').getBoundingClientRect = () => ({ width: 368, height: 440 }); game.resize();
   checkRows(440);
+});
+
+test('shovel mode removes a planted friend and frees its exact slot without refunding a spark', () => {
+  const { game, elements } = boot(); game.selectOffer(game.state.offers[0]); game.selectOffer(game.state.offers[0]);
+  const planted = game.state.friends[0]; const slot = planted.slot; const sparks = game.state.sparks;
+  elements.get('#shovel').events.click();
+  assert.equal(game.state.shovelMode, true);
+  elements.get('#arena').events.pointerdown({ clientX: planted.x, clientY: planted.y });
+  assert.equal(game.state.shovelMode, false);
+  assert.equal(game.state.friends.some(friend => friend.slot === slot), false);
+  assert.equal(game.state.sparks, sparks);
+  game.selectOffer(game.state.offers[0]);
+  assert.equal(game.state.friends.at(-1).slot, slot);
 });
 
 test('planted friends generate clickable Nectar that returns one Spark', () => {

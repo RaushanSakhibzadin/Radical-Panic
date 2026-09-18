@@ -130,6 +130,10 @@ h1 em { color: var(--coral); font-style: normal; }
 .skip-button { display: flex; justify-content: space-between; width: 100%; padding: 11px 0; border: 0; border-bottom: 1px solid var(--line); background: transparent; font-size: 13px; cursor: pointer; }
 .skip-button span { font: 400 9px "DM Mono", monospace; opacity: .5; text-transform: uppercase; }
 .skip-button:disabled { opacity: .35; cursor: not-allowed; }
+.shovel-button { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 8px; padding: 11px 0; border: 1px solid var(--line); border-radius: 9px; background: #f3ead8; font-size: 13px; cursor: pointer; }
+.shovel-button span { margin-right: 10px; font: 400 9px "DM Mono", monospace; opacity: .55; text-transform: uppercase; }
+.shovel-button[aria-pressed="true"] { background: var(--coral); box-shadow: 3px 3px 0 var(--ink); }
+.shovel-button:disabled { opacity: .35; cursor: not-allowed; }
 .legend { display: flex; flex-wrap: wrap; gap: 10px; padding: 13px 0; font: 500 9px "DM Mono", monospace; text-transform: uppercase; }
 .dot { display: inline-block; width: 7px; height: 7px; margin-right: 4px; border-radius: 50%; }
 .dot.coral { background: var(--coral); }.dot.blue { background: var(--blue); }.dot.green { background: var(--green); }

@@ -6,7 +6,7 @@
   const ui = {
     wave: document.querySelector("#wave"), health: document.querySelector("#garden-health"), sparks: document.querySelector("#sparks"), nectar: document.querySelector("#nectar"),
     best: document.querySelector("#best-wave"), choices: document.querySelector("#choices"), generation: document.querySelector("#generation"),
-    reroll: document.querySelector("#reroll"), forget: document.querySelector("#forget"), sound: document.querySelector("#sound-toggle"),
+    reroll: document.querySelector("#reroll"), shovel: document.querySelector("#shovel"), forget: document.querySelector("#forget"), sound: document.querySelector("#sound-toggle"),
     message: document.querySelector("#message"), gameOver: document.querySelector("#game-over"), finalWave: document.querySelector("#final-wave"),
     playAgain: document.querySelector("#play-again"), pause: document.querySelector("#pause"), memoryStatus: document.querySelector("#memory-status"),
     gardenLabel: document.querySelector("#garden-label"), victory: document.querySelector("#victory"),
@@ -47,7 +47,7 @@
   const NAMES = ["Wobble", "Pip", "Sprig", "Mochi", "Bumble", "Peep", "Noodle", "Midge", "Tumble", "Bean", "Doodle", "Fizz"];
   const COLORS = ["#ffd47e", "#ffad91", "#a8d9a1", "#9bcaf2", "#d8b7ec", "#f6acc5"];
   const STORAGE_KEY = "radical-rascals-evolution-v1";
-  const GARDEN_ROWS = 1, GARDEN_COLUMNS = 8, GARDEN_TOP = .72, GARDEN_BOTTOM = .94;
+  const GARDEN_ROWS = 1, GARDEN_COLUMNS = 16, GARDEN_TOP = .72, GARDEN_BOTTOM = .94;
   const GARDEN_CAPACITY = GARDEN_ROWS * GARDEN_COLUMNS;
   const SPARK_CAP = 12;
   const VICTORY_DURATION = 3.2;
@@ -70,7 +70,7 @@
 
   function freshState() {
     return {
-      wave: 1, health: 10, sparks: 3, nectar: 0, generation: memory.generation || 1, score: 0,
+      wave: 1, health: 10, sparks: 3, nectar: 0, shovelMode: false, generation: memory.generation || 1, score: 0,
       friends: [], enemies: [], particles: [], projectiles: [], nectarDrops: [], offers: [],
       spawnLeft: 5, spawnTimer: 2, wavePause: 0, celebrating: false, over: false, started: false, paused: false, time: 0
     };
@@ -335,7 +335,7 @@
     const gradient = ctx.createLinearGradient(0, 0, 0, h);
     gradient.addColorStop(0, "#f2c9b1"); gradient.addColorStop(GARDEN_TOP - .01, "#f5e6c8"); gradient.addColorStop(GARDEN_TOP, "#dbe9d2"); gradient.addColorStop(1, "#a9c99f");
     ctx.fillStyle = gradient; ctx.fillRect(0, 0, w, h);
-    // One planting rail, with eight visible slots. No extra boundary/grid lines.
+    // One planting rail, with sixteen visible slots. No extra boundary/grid lines.
     const plantingY = h * (GARDEN_TOP + GARDEN_BOTTOM) / 2;
     ctx.strokeStyle = "#71966a"; ctx.lineWidth = 2; ctx.setLineDash([5, 7]);
     ctx.beginPath(); ctx.moveTo(w * .07, plantingY + 27); ctx.lineTo(w * .93, plantingY + 27); ctx.stroke(); ctx.setLineDash([]);
@@ -365,7 +365,7 @@
     const bounce = reducedMotion.matches ? 0 : Math.sin(friend.age * (2.5 + g.speed * 3)) * g.bounce * 7;
     const wobble = (reducedMotion.matches ? 0 : Math.sin(friend.age * 2 + friend.x) * g.wobble * .15) + g.tilt;
     ctx.save(); ctx.translate(friend.x, friend.y + bounce); ctx.rotate(wobble);
-    const emojiScale = clamp(width / 15 / 48, .68, 1); ctx.scale(emojiScale, emojiScale);
+    const emojiScale = clamp(width / 21 / 48, .4, .78); ctx.scale(emojiScale, emojiScale);
     ctx.globalAlpha = 1;
     ctx.fillStyle = "rgba(23,34,28,.15)"; ctx.beginPath(); ctx.ellipse(0, 28 - bounce, 24, 7, 0, 0, Math.PI * 2); ctx.fill();
     drawEmojiFace(ctx, friend, emotionFor(friend), friend.blink < 0);
@@ -388,6 +388,15 @@
     const rect = canvas.getBoundingClientRect();
     const scaleX = width / rect.width, scaleY = height / rect.height;
     const x = (event.clientX - (rect.left || 0)) * scaleX, y = (event.clientY - (rect.top || 0)) * scaleY;
+    if (state.shovelMode) {
+      const index = state.friends.findIndex(friend => Math.hypot(friend.x - x, friend.y - y) < Math.max(24, width / 24));
+      if (index >= 0) {
+        const [removed] = state.friends.splice(index, 1);
+        burst(removed.x, removed.y, "#d18b55", 12); state.shovelMode = false;
+        updateUI(); renderOffers(); tone(180, .08, "triangle"); announce(`${removed.name} was dug up`);
+      }
+      return;
+    }
     const index = state.nectarDrops.findIndex(drop => Math.hypot(drop.x - x, drop.y - y) < 34);
     if (index < 0) return;
     state.nectarDrops.splice(index, 1); state.nectar++; state.sparks = Math.min(SPARK_CAP, state.sparks + 1);
@@ -490,6 +499,8 @@
     ui.wave.textContent = state.wave; ui.health.textContent = state.health; ui.sparks.textContent = state.sparks; ui.nectar.textContent = state.nectar;
     ui.best.textContent = memory.bestWave || 0; ui.generation.textContent = String(state.generation).padStart(2, "0");
     ui.reroll.disabled = state.sparks < 1 || state.over || (!state.started && state.sparks === 1);
+    ui.shovel.disabled = state.over || state.friends.length === 0;
+    ui.shovel.setAttribute("aria-pressed", String(state.shovelMode));
     ui.pause.disabled = state.over || !state.started;
     ui.pause.textContent = state.paused ? "Resume" : "Pause";
     ui.pause.setAttribute("aria-pressed", String(state.paused));
@@ -525,6 +536,7 @@
   }
 
   ui.reroll.addEventListener("click", () => { if (state.sparks < 1 || state.over || (!state.started && state.sparks === 1)) return; state.sparks--; rememberChoices(null); refillOffers(); updateUI(); tone(350, .05); });
+  ui.shovel.addEventListener("click", () => { if (state.over || state.friends.length === 0) return; state.shovelMode = !state.shovelMode; updateUI(); announce(state.shovelMode ? "Pick a friend to dig up" : "Shovel put away"); });
   ui.pause.addEventListener("click", () => { if (state.over || !state.started) return; state.paused = !state.paused; updateUI(); announce(state.paused ? "Garden paused" : "Here come the radicals!"); });
   ui.forget.addEventListener("click", () => { memory = { lineages: [], generation: 1, bestWave: 0 }; saveMemory(); start(); announce("Evolutionary memory cleared"); });
   ui.sound.addEventListener("click", () => { muted = !muted; ui.sound.classList.toggle("muted", muted); ui.sound.setAttribute("aria-label", muted ? "Turn sound on" : "Turn sound off"); if (!muted) tone(520, .06); });
