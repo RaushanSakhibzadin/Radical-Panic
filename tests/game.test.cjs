@@ -16,7 +16,7 @@ function boot(saved, blocked = false) {
   function element() {
     return { children: [], events: {}, style: { setProperty() {} }, classList: { add() {}, remove() {}, toggle() {} },
       replaceChildren() { this.children = []; }, append(child) { this.children.push(child); },
-      addEventListener(type, handler) { this.events[type] = handler; }, setAttribute() {},
+      addEventListener(type, handler) { this.events[type] = handler; }, setAttribute(key, value) { this[key] = value; },
       getContext() { return drawing; }, getBoundingClientRect() { return { width: 720, height: 610 }; } };
   }
   let stored = saved;
@@ -29,12 +29,12 @@ function boot(saved, blocked = false) {
     localStorage: { getItem() { if (blocked) throw Error('Storage blocked'); return stored ?? null; }, setItem(_, value) { if (blocked) throw Error('Storage blocked'); stored = value; } },
     setTimeout() {}, clearTimeout() {}, requestAnimationFrame() {} });
   const source = fs.readFileSync(require.resolve('../game.js'), 'utf8').replace('start(); requestAnimationFrame(frame);',
-    'start(); globalThis.game = { get state() { return state; }, get memory() { return memory; }, selectOffer, randomGenome, chooseParent, rememberChoices, update, resize, draw, start, renderOffers, emotionFor, drawEmojiFace, EMOJI, RADICALS, RADICAL_COLORS, MAX_LEVEL, affinity, damageMultiplier };');
+    'start(); globalThis.game = { get state() { return state; }, get memory() { return memory; }, selectOffer, randomGenome, chooseParent, rememberChoices, update, resize, draw, start, renderOffers, emotionFor, drawEmojiFace, EMOJI, RADICALS, RADICAL_COLORS, MAX_LEVEL, affinity, damageMultiplier, radicalLabel, radicalGlyph, radicalColor, decayLineages, drawOfferPreviews, previewEmotion };');
   vm.runInContext(source, context);
   return { game: context.game, elements, context, drawnText, textStyles, stored: () => stored };
 }
 
-test('waits for first recruitment, then spends one spark and remembers all visible candidates', () => {
+test('waits for first recruitment, then spends one spark and remembers only what was planted', () => {
   const { game } = boot();
   game.update(30);
   assert.equal(game.state.enemies.length, 0);
@@ -42,9 +42,11 @@ test('waits for first recruitment, then spends one spark and remembers all visib
   game.selectOffer(chosen);
   assert.equal(game.state.sparks, 2);
   assert.equal(game.state.friends.length, 1);
-  assert.equal(game.memory.lineages.length, 3);
-  assert.equal(game.memory.lineages.find(item => item.id === chosen.id).fitness, 1.6);
-  assert.equal(game.memory.lineages.filter(item => item.fitness === .25).length, 2);
+  // Only the planted candidate is enrolled. The two rejects are not stored as
+  // lineages of their own - storing them crowded newcomers out of the pool.
+  assert.equal(game.memory.lineages.length, 1);
+  assert.equal(game.memory.lineages[0].id, chosen.id);
+  assert.equal(game.memory.lineages[0].fitness, 1.6);
   game.selectOffer(chosen); // A stale tray click must not spend again.
   assert.equal(game.state.sparks, 2);
   game.update(3);
@@ -90,8 +92,10 @@ test('defence reduces contact damage, HP depletion frees the same placement slot
 test('reload preserves preferences; corrupt or blocked storage keeps the game playable', () => {
   const original = boot(); original.game.selectOffer(original.game.state.offers[0]);
   const reloaded = boot(original.stored());
-  assert.equal(reloaded.game.memory.lineages.length, 3);
-  assert.equal(reloaded.game.state.generation, 2);
+  assert.equal(reloaded.game.memory.lineages.length, 1);
+  // GEN is lineage depth now: planting a founder puts you at generation 1.
+  assert.equal(reloaded.game.state.generation, 1);
+  assert.equal(reloaded.game.memory.lineages[0].depth, 0);
   for (const input of ['{broken', '{}', JSON.stringify({ lineages: [{ emoji: '<script>' }], generation: -2 })]) {
     const { game } = boot(input); game.selectOffer(game.state.offers[0]); assert.equal(game.state.friends.length, 1);
   }
@@ -108,7 +112,7 @@ test('pause, background tabs, game over and replay keep state coherent', () => {
   game.state.enemies.push({ x: 24, y: 610, hp: 100, maxHp: 100, phase: 0, hit: 0, speed: 20, drift: 0 });
   game.update(.1); assert.equal(game.state.over, true); assert.equal(game.state.health, 0);
   const sparks = game.state.sparks; elements.get('#reroll').events.click(); assert.equal(game.state.sparks, sparks);
-  game.start(); assert.equal(game.state.health, 10); assert.equal(game.state.over, false); assert.equal(game.memory.lineages.length, 3);
+  game.start(); assert.equal(game.state.health, 10); assert.equal(game.state.over, false); assert.equal(game.memory.lineages.length, 1);
 });
 
 test('retina scaling uses logical coordinates and attackers are Kangxi radicals', () => {
@@ -186,11 +190,13 @@ test('planted friends generate clickable Nectar that returns one Spark', () => {
 
 test('radicals use meaning colours and remain visible across every radical type', () => {
   const { game, elements, drawnText } = boot();
-  for (const char of game.RADICALS) game.state.enemies.push({ char, x: 100, y: 100, size: 40, hp: 10, maxHp: 10, phase: 0, hit: 0 });
+  game.RADICALS.forEach((char, index) => game.state.enemies.push({
+    char, x: 60 + (index % 8) * 80, y: 60 + Math.floor(index / 8) * 70, size: 40, hp: 10, maxHp: 10, phase: 0, hit: 0 }));
   game.draw();
   assert.equal(game.RADICALS.length, 214);
   assert.equal(new Set(game.RADICALS).size, 214);
-  assert.equal(new Set(Object.values(game.RADICAL_COLORS)).size, 14);
+  // Every radical is visually distinct now, not just the fourteen hand-coloured ones.
+  assert.equal(new Set(game.RADICALS.map(game.radicalColor)).size, 214);
   assert.ok(elements.get('#arena'));
   assert.ok(drawnText.some(([text]) => text === 'WATER'));
   assert.ok(drawnText.some(([text]) => text === 'FIRE'));
@@ -250,13 +256,22 @@ test('semantic counters apply to real projectiles: water rapidly defeats fire, n
 test('each attacker has a readable English label that stays inside a mobile canvas', () => {
   const { game, elements, drawnText } = boot();
   elements.get('#arena').getBoundingClientRect = () => ({ width: 298, height: 440 }); game.resize();
-  for (const char of game.RADICALS) game.state.enemies.push({ char, x: 5, y: 100, size: 40, hp: 10, maxHp: 10, phase: 0, hit: 0 });
+  game.RADICALS.forEach((char, index) => game.state.enemies.push({
+    char, x: 5, y: 40 + index * 30, size: 40, hp: 10, maxHp: 10, phase: 0, hit: 0 }));
   game.draw();
-  const labels = drawnText.filter(([text]) => /^[A-Z][A-Z0-9 ]+$/.test(text));
+  const labels = drawnText.filter(([text]) => /^[A-Z][A-Z ]*$/.test(text));
   assert.equal(labels.length, game.RADICALS.length);
   assert.ok(labels.some(([text]) => text === 'FIRE'));
   assert.ok(labels.some(([text]) => text === 'WATER'));
-  for (const [text, x, y] of labels) { assert.ok(x >= text.length * 3); assert.ok(x <= 298 - text.length * 3); assert.ok(y > 100); }
+  // Still clamped inside a narrow canvas...
+  for (const [text, x] of labels) { assert.ok(x >= text.length * 3); assert.ok(x <= 298 - text.length * 3); }
+  // ...and no two labels are printed on top of each other any more.
+  const placed = labels.map(([text, x, y]) => ({ w: text.length * 6 + 8, x, y }));
+  for (let i = 0; i < placed.length; i++) for (let j = i + 1; j < placed.length; j++) {
+    const a = placed[i], b = placed[j];
+    assert.ok(Math.abs(a.y - b.y) >= 13 || Math.abs(a.x - b.x) >= (a.w + b.w) / 2,
+      `labels overlap at ${a.x},${a.y}`);
+  }
 });
 
 test('giant celebration plays only on a level win, pauses safely, and ends before the next level', () => {
@@ -295,14 +310,18 @@ test('giant celebration plays only on a level win, pauses safely, and ends befor
   assert.equal(victory.hidden, true, 'Losing must not trigger a victory animation');
 });
 
-test('all emoji have preview mouths and react to attacks, nearby enemies, and low HP', () => {
+test('all emoji have preview faces and react to attacks, nearby enemies, and low HP', () => {
   const { game, elements } = boot();
   const offer = game.state.offers[0];
   for (const emoji of game.EMOJI) {
     offer.emoji = emoji; game.renderOffers();
-    const markup = elements.get('#choices').children[0].innerHTML;
-    assert.match(markup, /mini-mouth/);
-    assert.match(markup, /data-emotion="(happy|curious|determined)"/);
+    const card = elements.get('#choices').children[0];
+    // The preview is a canvas painted by drawEmojiFace, not a separate CSS drawing.
+    const specimen = card.children.find(child => child.className === 'specimen');
+    assert.ok(specimen, `${emoji} needs a specimen`);
+    assert.ok(specimen.children.some(child => child.className === 'specimen-art'),
+      `${emoji} preview must be a canvas`);
+    assert.match(String(specimen['data-emotion']), /^(happy|curious|determined)$/);
     for (const mood of ['happy', 'curious', 'determined', 'scared', 'hurt', 'joy']) {
       let mouthCurves = 0;
       const pen = new Proxy({}, { get: (_, key) => ['ellipse', 'rect', 'quadraticCurveTo'].includes(key) ? () => mouthCurves++ : () => {} });
@@ -317,4 +336,92 @@ test('all emoji have preview mouths and react to attacks, nearby enemies, and lo
   friend.hp = friend.maxHp;
   game.state.enemies.push({ x: friend.x, y: friend.y - 80 });
   assert.equal(game.emotionFor(friend), 'scared');
+});
+
+test('every radical has an English name and a widely-supported CJK glyph, never a number', () => {
+  const { game } = boot();
+  assert.equal(game.RADICALS.length, 214);
+  for (const radical of game.RADICALS) {
+    const label = game.radicalLabel(radical);
+    assert.match(label, /^[a-z][a-z ]*$/, `${radical} must have a word for a name`);
+    assert.doesNotMatch(label, /\d/, `${radical} must not fall back to a number`);
+    // Drawn as the ordinary CJK ideograph, not the U+2F00 compatibility character.
+    const glyph = game.radicalGlyph(radical);
+    assert.equal(glyph.length, 1);
+    assert.ok(glyph.codePointAt(0) < 0x2F00 || glyph.codePointAt(0) > 0x2FD5, `${radical} should draw as CJK`);
+  }
+  assert.equal(game.radicalLabel('\u2F55'), 'fire');
+  assert.equal(game.radicalGlyph('\u2F55'), '\u706b');
+  assert.equal(new Set(game.RADICALS.map(game.radicalColor)).size, 214, 'each radical needs its own colour');
+});
+
+test('a consistent player breeds their preference without collapsing the pool to one species', () => {
+  const { game } = boot();
+  for (let i = 0; i < 1200; i++) {
+    game.state.sparks = 50; game.state.friends.length = 0;
+    game.selectOffer([...game.state.offers].sort((a, b) => b.genome.bounce - a.genome.bounce)[0]);
+    if (i % 6 === 0) game.decayLineages();
+  }
+  const pool = game.memory.lineages;
+  const offeredBounce = game.state.offers.reduce((sum, o) => sum + o.genome.bounce, 0) / 3;
+  // Selection still works: the preferred gene is driven towards its ceiling.
+  assert.ok(offeredBounce > .8, `preference should be bred in, got ${offeredBounce}`);
+  // ...but the pool must not become a monoculture, which is what used to happen.
+  assert.ok(pool.length > 1);
+  assert.ok(new Set(pool.map(item => item.emoji)).size >= 10,
+    `expected many species to survive, got ${new Set(pool.map(item => item.emoji)).size}`);
+  // No emoji may hoard the pool.
+  const counts = new Map();
+  for (const item of pool) counts.set(item.emoji, (counts.get(item.emoji) || 0) + 1);
+  assert.ok(Math.max(...counts.values()) <= 4);
+});
+
+test('a hidden or unlaid-out canvas never destroys the garden', () => {
+  const { game, elements } = boot();
+  game.selectOffer(game.state.offers[0]);
+  const before = game.state.friends[0].x;
+  // A zero-sized layout pass used to scale every position by width/0 -> NaN,
+  // losing the whole garden for the rest of the run.
+  elements.get('#arena').getBoundingClientRect = () => ({ width: 0, height: 0 });
+  game.resize();
+  assert.equal(game.state.friends[0].x, before, 'positions must survive a 0x0 layout');
+  elements.get('#arena').getBoundingClientRect = () => ({ width: 360, height: 440 });
+  game.resize();
+  assert.ok(Number.isFinite(game.state.friends[0].x));
+  assert.equal(game.state.friends[0].x, before / 2);
+  game.draw();
+});
+
+test('the card preview is painted by the same routine as the arena, from the same genome', () => {
+  const { game } = boot();
+  const offer = game.state.offers[0];
+  game.renderOffers();
+  // Record every drawing call the preview makes...
+  const calls = [];
+  const spy = new Proxy({}, { get: (_, key) => (...args) => calls.push([String(key), ...args]) });
+  offer.art.getContext = () => spy;
+  game.drawOfferPreviews(0);
+  assert.ok(calls.length > 0, 'the preview must actually draw');
+  assert.ok(calls.some(([key, text]) => key === 'fillText' && text === offer.emoji),
+    'the preview draws the emoji body');
+
+  // ...and compare against drawing the same offer straight through drawEmojiFace.
+  const direct = [];
+  const directSpy = new Proxy({}, { get: (_, key) => (...args) => direct.push(String(key)) });
+  game.drawEmojiFace(directSpy, offer, game.previewEmotion(offer));
+  const previewOps = calls.map(([key]) => key);
+  for (const op of new Set(direct)) {
+    assert.ok(previewOps.includes(op), `preview is missing ${op} that the arena draws`);
+  }
+});
+
+test('the tray always offers a real choice, never the same lineage three times', () => {
+  const { game } = boot();
+  for (let round = 0; round < 60; round++) {
+    game.state.sparks = 50; game.state.friends.length = 0;
+    const species = new Set(game.state.offers.map(offer => offer.emoji));
+    assert.equal(species.size, 3, `round ${round} offered ${species.size} distinct emoji`);
+    // Keep picking the same favourite; the tray must still show alternatives.
+    game.selectOffer(game.state.offers[0]);
+  }
 });

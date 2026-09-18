@@ -58,9 +58,11 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--blue); outline-
 .sound-button.muted { opacity: .45; text-decoration: line-through; }
 .donate-button { padding: 0 16px; color: var(--ink); }
 
-.hero { display: grid; grid-template-columns: 1.4fr .65fr; gap: 50px; align-items: end; padding: 42px 0 34px; }
+/* The hero used to push the arena below the fold on a 1400x1000 screen. It is
+   compact now so the game itself is the first thing you see. */
+.hero { display: grid; grid-template-columns: 1.4fr .65fr; gap: 34px; align-items: end; padding: 18px 0 16px; }
 .eyebrow { margin: 0 0 10px; font: 500 10px "DM Mono", monospace; text-transform: uppercase; letter-spacing: .13em; }
-h1 { margin: 0; font-size: clamp(46px, 7vw, 82px); line-height: .84; letter-spacing: -.065em; }
+h1 { margin: 0; font-size: clamp(30px, 4.2vw, 46px); line-height: .9; letter-spacing: -.045em; }
 h1 em { color: var(--coral); font-style: normal; }
 .intro { margin: 0 0 5px; font-size: 17px; line-height: 1.45; max-width: 380px; }
 
@@ -87,7 +89,11 @@ h1 em { color: var(--coral); font-style: normal; }
 .choice { position: relative; display: grid; grid-template-columns: 65px 1fr 23px; align-items: center; gap: 11px; min-height: 92px; width: 100%; padding: 12px; border: 1.5px solid var(--ink); border-radius: 15px; background: #fffdf8; text-align: left; cursor: pointer; transition: transform .16s, box-shadow .16s, background .16s; }
 .choice:hover, .choice:focus-visible { transform: translate(-3px,-3px); box-shadow: 4px 4px 0 var(--ink); outline: 0; background: white; }
 .choice:disabled { cursor: not-allowed; opacity: .5; transform: none; box-shadow: none; }
-.specimen { position: relative; display: grid; place-items: center; width: 62px; height: 62px; border-radius: 45% 55% 49% 51%; background: var(--specimen-bg); font-size: 39px; transform: rotate(var(--tilt)); animation: specimen-wiggle var(--tempo) ease-in-out infinite alternate; }
+/* The preview is now drawn by the same canvas routine as the arena, so the face
+   you choose from is exactly the face you get. The wiggle lives in the genome and
+   is animated in JS, not CSS, for the same reason. */
+.specimen { position: relative; display: grid; place-items: center; width: 62px; height: 62px; border-radius: 45% 55% 49% 51%; background: var(--specimen-bg); overflow: hidden; }
+.specimen-art { width: 100%; height: 100%; display: block; }
 @keyframes specimen-wiggle { from { transform: translateY(0) rotate(calc(var(--tilt) - var(--wobble))); } to { transform: translateY(var(--bounce)) rotate(calc(var(--tilt) + var(--wobble))); } }
 .mini-eyes { position: absolute; display: flex; gap: var(--eye-gap); left: 50%; top: 21px; transform: translateX(-50%) rotate(calc(var(--tilt) * -1)); }
 .mini-eyes i { width: var(--eye-size); height: calc(var(--eye-size) * 1.25); border-radius: 50%; background: #fff; border: 1px solid #17221c; }
@@ -151,7 +157,14 @@ footer a { color: inherit; }
 @media (max-width: 850px) {
   .run-stats div { min-width: 60px; padding-inline: 8px; }
   .game-layout { grid-template-columns: 1fr; }
-  .arena-wrap { min-height: 500px; border-right: 0; border-bottom: 2px solid var(--ink); }
+  /* Stacked, the mutation tray sat entirely below the arena, so you could not watch
+     the battle while choosing. Pinning the arena keeps both on screen.
+     `overflow: hidden` on the parent would trap the sticky element inside that box,
+     so the rounding moves onto the arena itself while stacked. */
+  .game-layout { overflow: visible; }
+  .arena-wrap { position: sticky; top: 0; z-index: 4; min-height: 46vh; border-right: 0; border-bottom: 2px solid var(--ink); background: #d9e7d0; border-radius: 20px 20px 0 0; }
+  .arena-wrap canvas { border-radius: 20px 20px 0 0; }
+  .lab { border-radius: 0 0 20px 20px; }
   .lab { min-height: 560px; }
 }
 
@@ -164,7 +177,7 @@ footer a { color: inherit; }
   .hero { grid-template-columns: 1fr; gap: 18px; padding: 34px 0 28px; }
   h1 { font-size: 48px; }
   .game-layout { box-shadow: 5px 6px 0 var(--ink); }
-  .arena-wrap { min-height: 440px; }
+  .arena-wrap { min-height: 42vh; }
   .lab { min-height: 550px; padding: 22px; }
   footer { gap: 20px; }
 }
