@@ -31,11 +31,13 @@ node --test tests/game.test.cjs
 - Each mutation changes attack, defence, attack speed, HP, range, bounce, wobble, eye size, and eye spacing. Animated previews show the personality before recruitment.
 - Defeat incoming Kangxi radical characters before they reach the garden.
 - Meaning-based counters deal **2.5× damage**: water quenches fire, fire burns trees, plants absorb water, cold freezes water, and more. Each candidate shows its strong matchups; open **Meaning matters** for the complete rules. Neutral matchups deal normal damage.
-- The garden has one horizontal row with four friend slots on every screen size.
+- The garden has one horizontal row with eight friend slots on every screen size.
+- Each planted friend generates a floating Nectar drop every few seconds. Click a drop to collect it; each Nectar gives one Spark so the garden can keep growing.
+- Radical colours follow their meaning: water is blue, fire orange, trees green, mountains purple, earth brown, sun gold, and moon indigo.
 - Level 1 starts with one clearly marked planting line. Every defender has eyes, a mouth and expressions that react to danger, damage and attacks; preview faces reflect their mutation traits.
 - Winning a level triggers a giant, happy emoji celebration for about three seconds before the next level starts. Recruitment and losses do not trigger it. Reduced-motion mode shows a still celebration instead.
 - Friends shoot across roughly 300–490 pixels, depending on their inherited range gene, so they can engage radicals well before contact.
-- Radicals attack friends on contact. Defence reduces incoming damage; friends with no HP leave a free slot for another recruit. The garden holds four friends.
+- Radicals attack friends on contact. Defence reduces incoming damage; friends with no HP leave a free slot for another recruit. The garden holds eight friends.
 - Survive a wave to earn two sparks. Every seventh defeated radical also drops one.
 - Selected lineages gain fitness and are more likely to return with small mutations.
 - Only mutations offered alongside a deliberate pick or shuffle are counted as skipped. Skipped lineages lose a little fitness. A 23% chance of a completely new lineage keeps the population varied.

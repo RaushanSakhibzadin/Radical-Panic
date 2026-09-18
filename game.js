@@ -4,7 +4,7 @@
   const canvas = document.querySelector("#arena");
   const ctx = canvas.getContext("2d");
   const ui = {
-    wave: document.querySelector("#wave"), health: document.querySelector("#garden-health"), sparks: document.querySelector("#sparks"),
+    wave: document.querySelector("#wave"), health: document.querySelector("#garden-health"), sparks: document.querySelector("#sparks"), nectar: document.querySelector("#nectar"),
     best: document.querySelector("#best-wave"), choices: document.querySelector("#choices"), generation: document.querySelector("#generation"),
     reroll: document.querySelector("#reroll"), forget: document.querySelector("#forget"), sound: document.querySelector("#sound-toggle"),
     message: document.querySelector("#message"), gameOver: document.querySelector("#game-over"), finalWave: document.querySelector("#final-wave"),
@@ -36,14 +36,20 @@
     "⼟": { name: "earth", counters: ["plant"] }, "⽥": { name: "field", counters: ["cold"] },
     "⼒": { name: "strength", counters: [] }, "⾨": { name: "gate", counters: [] }
   };
+  const RADICAL_COLORS = {
+    "⽔": "#2f80c9", "⽕": "#ed6a3a", "⽊": "#4d9143", "⼭": "#7650a8", "⼟": "#a06a3b",
+    "⽇": "#e2a51c", "⽉": "#5864ad", "⽥": "#7c9b42", "⼼": "#d14d72", "⼿": "#c17b37",
+    "⼈": "#55706b", "⼝": "#9b4e74", "⼒": "#8a4f9e", "⾨": "#53606b"
+  };
   const affinity = emoji => Object.entries(AFFINITIES).find(([, group]) => group.emoji.includes(emoji))?.[0] || "neutral";
   const counters = emoji => RADICALS.filter(radical => RADICAL_INFO[radical].counters.includes(affinity(emoji)));
   const damageMultiplier = (emoji, radical) => RADICAL_INFO[radical]?.counters.includes(affinity(emoji)) ? 2.5 : 1;
   const NAMES = ["Wobble", "Pip", "Sprig", "Mochi", "Bumble", "Peep", "Noodle", "Midge", "Tumble", "Bean", "Doodle", "Fizz"];
   const COLORS = ["#ffd47e", "#ffad91", "#a8d9a1", "#9bcaf2", "#d8b7ec", "#f6acc5"];
   const STORAGE_KEY = "radical-rascals-evolution-v1";
-  const GARDEN_ROWS = 1, GARDEN_COLUMNS = 4, GARDEN_TOP = .72, GARDEN_BOTTOM = .94;
+  const GARDEN_ROWS = 1, GARDEN_COLUMNS = 8, GARDEN_TOP = .72, GARDEN_BOTTOM = .94;
   const GARDEN_CAPACITY = GARDEN_ROWS * GARDEN_COLUMNS;
+  const SPARK_CAP = 12;
   const VICTORY_DURATION = 3.2;
   const GENES = ["power", "defence", "speed", "life", "range", "wobble", "bounce", "eyeSize", "eyeGap"];
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -64,8 +70,8 @@
 
   function freshState() {
     return {
-      wave: 1, health: 10, sparks: 3, generation: memory.generation || 1, score: 0,
-      friends: [], enemies: [], particles: [], projectiles: [], offers: [],
+      wave: 1, health: 10, sparks: 3, nectar: 0, generation: memory.generation || 1, score: 0,
+      friends: [], enemies: [], particles: [], projectiles: [], nectarDrops: [], offers: [],
       spawnLeft: 5, spawnTimer: 2, wavePause: 0, celebrating: false, over: false, started: false, paused: false, time: 0
     };
   }
@@ -191,9 +197,13 @@
     const col = slot % columns;
     const row = Math.floor(slot / columns);
     state.friends.push({
-      ...offer, slot, x: width * (.16 + col * .23), y: height * (GARDEN_TOP + (row + .5) * (GARDEN_BOTTOM - GARDEN_TOP) / GARDEN_ROWS),
-      hp: 35 + g.life * 80, maxHp: 35 + g.life * 80, cooldown: random(0, .7), age: random(0, 10), blink: random(1, 4), attackFace: 0, hurtFace: 0
+      ...offer, slot, x: slotX(slot), y: height * (GARDEN_TOP + (row + .5) * (GARDEN_BOTTOM - GARDEN_TOP) / GARDEN_ROWS),
+      hp: 35 + g.life * 80, maxHp: 35 + g.life * 80, cooldown: random(0, .7), age: random(0, 10), blink: random(1, 4), attackFace: 0, hurtFace: 0, nectarTimer: random(3.5, 6.5)
     });
+  }
+
+  function slotX(slot) {
+    return width * (.08 + slot * (.84 / Math.max(1, GARDEN_COLUMNS - 1)));
   }
 
   function spawnEnemy() {
@@ -227,7 +237,7 @@
     } else if (!state.enemies.length) {
       state.wavePause = VICTORY_DURATION;
       celebrateLevel();
-      state.sparks = Math.min(6, state.sparks + 2);
+      state.sparks = Math.min(SPARK_CAP, state.sparks + 2);
       memory.bestWave = Math.max(memory.bestWave || 0, state.wave);
       saveMemory(); updateUI(); renderOffers();
       announce("Garden safe — +2 sparks");
@@ -236,6 +246,12 @@
 
     for (const friend of state.friends) {
       friend.age += dt;
+      friend.nectarTimer -= dt;
+      if (friend.nectarTimer <= 0) {
+        state.nectarDrops.push({ x: friend.x, y: friend.y - 48, baseY: friend.y - 48, age: 0, life: 12, color: friend.color });
+        friend.nectarTimer = 5.5 - friend.genome.speed * 2;
+        burst(friend.x, friend.y - 42, "#f4b942", 4);
+      }
       friend.attackFace = Math.max(0, (friend.attackFace || 0) - dt);
       friend.hurtFace = Math.max(0, (friend.hurtFace || 0) - dt);
       friend.cooldown -= dt;
@@ -290,6 +306,11 @@
         if (state.health <= 0) { endGame(); break; }
       }
     }
+    for (let i = state.nectarDrops.length - 1; i >= 0; i--) {
+      const drop = state.nectarDrops[i];
+      drop.age += dt; drop.life -= dt; drop.y = drop.baseY + Math.sin(drop.age * 3) * 6;
+      if (drop.life <= 0) state.nectarDrops.splice(i, 1);
+    }
     for (let i = state.particles.length - 1; i >= 0; i--) {
       const p = state.particles[i]; p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 60 * dt;
       if (p.life <= 0) state.particles.splice(i, 1);
@@ -300,7 +321,7 @@
     const index = state.enemies.indexOf(enemy);
     if (index < 0) return;
     state.enemies.splice(index, 1); state.score++;
-    if (state.score % 7 === 0) { state.sparks = Math.min(6, state.sparks + 1); announce("A wild spark appeared!"); updateUI(); renderOffers(); }
+    if (state.score % 7 === 0) { state.sparks = Math.min(SPARK_CAP, state.sparks + 1); announce("A wild spark appeared!"); updateUI(); renderOffers(); }
     burst(enemy.x, enemy.y, "#17221c", 8);
   }
 
@@ -314,16 +335,17 @@
     const gradient = ctx.createLinearGradient(0, 0, 0, h);
     gradient.addColorStop(0, "#f2c9b1"); gradient.addColorStop(GARDEN_TOP - .01, "#f5e6c8"); gradient.addColorStop(GARDEN_TOP, "#dbe9d2"); gradient.addColorStop(1, "#a9c99f");
     ctx.fillStyle = gradient; ctx.fillRect(0, 0, w, h);
-    // One planting rail, with four visible slots. No extra boundary/grid lines.
+    // One planting rail, with eight visible slots. No extra boundary/grid lines.
     const plantingY = h * (GARDEN_TOP + GARDEN_BOTTOM) / 2;
     ctx.strokeStyle = "#71966a"; ctx.lineWidth = 2; ctx.setLineDash([5, 7]);
     ctx.beginPath(); ctx.moveTo(w * .07, plantingY + 27); ctx.lineTo(w * .93, plantingY + 27); ctx.stroke(); ctx.setLineDash([]);
     for (let slot = 0; slot < GARDEN_CAPACITY; slot++) {
       if (state.friends.some(friend => friend.slot === slot)) continue;
-      const x = w * (.16 + slot * .23);
+      const x = slotX(slot);
       ctx.fillStyle = "#ffffff70"; ctx.beginPath(); ctx.ellipse(x, plantingY + 27, 23, 7, 0, 0, Math.PI * 2); ctx.fill();
     }
 
+    for (const drop of state.nectarDrops) drawNectar(drop);
     for (const friend of state.friends) drawFriend(friend);
     for (const enemy of state.enemies) drawEnemy(enemy);
     for (const shot of state.projectiles) {
@@ -343,12 +365,33 @@
     const bounce = reducedMotion.matches ? 0 : Math.sin(friend.age * (2.5 + g.speed * 3)) * g.bounce * 7;
     const wobble = (reducedMotion.matches ? 0 : Math.sin(friend.age * 2 + friend.x) * g.wobble * .15) + g.tilt;
     ctx.save(); ctx.translate(friend.x, friend.y + bounce); ctx.rotate(wobble);
+    const emojiScale = clamp(width / 15 / 48, .68, 1); ctx.scale(emojiScale, emojiScale);
     ctx.globalAlpha = 1;
     ctx.fillStyle = "rgba(23,34,28,.15)"; ctx.beginPath(); ctx.ellipse(0, 28 - bounce, 24, 7, 0, 0, Math.PI * 2); ctx.fill();
     drawEmojiFace(ctx, friend, emotionFor(friend), friend.blink < 0);
     ctx.restore();
     ctx.fillStyle = "rgba(23,34,28,.2)"; ctx.fillRect(friend.x - 20, friend.y + 37, 40, 3);
     ctx.fillStyle = "#71b36a"; ctx.fillRect(friend.x - 20, friend.y + 37, 40 * clamp(friend.hp / friend.maxHp, 0, 1), 3);
+  }
+
+  function drawNectar(drop) {
+    ctx.save(); ctx.translate(drop.x, drop.y); ctx.globalAlpha = clamp(drop.life, 0, 1);
+    ctx.fillStyle = "#f4b942"; ctx.strokeStyle = "#17221c"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, -10); ctx.bezierCurveTo(10, -2, 8, 8, 0, 11); ctx.bezierCurveTo(-8, 8, -10, -2, 0, -10); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#fff7c2"; ctx.beginPath(); ctx.arc(-3, -3, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.font = '500 8px "DM Mono", monospace'; ctx.textAlign = "center"; ctx.fillStyle = "#17221c"; ctx.fillText("+1", 0, 22);
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
+
+  function collectNectar(event) {
+    if (!state || state.over) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = width / rect.width, scaleY = height / rect.height;
+    const x = (event.clientX - (rect.left || 0)) * scaleX, y = (event.clientY - (rect.top || 0)) * scaleY;
+    const index = state.nectarDrops.findIndex(drop => Math.hypot(drop.x - x, drop.y - y) < 34);
+    if (index < 0) return;
+    state.nectarDrops.splice(index, 1); state.nectar++; state.sparks = Math.min(SPARK_CAP, state.sparks + 1);
+    updateUI(); renderOffers(); tone(720, .07, "sine"); announce("Nectar collected — +1 spark");
   }
 
   function previewEmotion(friend) {
@@ -419,7 +462,7 @@
     ctx.save(); ctx.translate(enemy.x, enemy.y); ctx.rotate(reducedMotion.matches ? 0 : Math.sin(enemy.phase) * .1);
     if (enemy.hit > 0) { ctx.shadowColor = "white"; ctx.shadowBlur = 16; }
     ctx.font = `700 ${enemy.size}px "Fredoka", sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillStyle = enemy.hit > 0 ? "#ff6d4a" : "#17221c"; ctx.fillText(enemy.char, 0, 0); ctx.restore();
+    ctx.fillStyle = enemy.hit > 0 ? "#ff6d4a" : (RADICAL_COLORS[enemy.char] || "#53606b"); ctx.fillText(enemy.char, 0, 0); ctx.restore();
     ctx.font = '500 9px "DM Mono", monospace'; ctx.textAlign = "center"; ctx.textBaseline = "top";
     const label = (RADICAL_INFO[enemy.char]?.name || "radical").toUpperCase();
     const labelWidth = ctx.measureText(label).width + 8;
@@ -439,12 +482,12 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     if (state) {
       const sx = width / oldW, sy = height / oldH;
-      for (const entity of [...state.friends, ...state.enemies, ...state.projectiles, ...state.particles]) { entity.x *= sx; entity.y *= sy; }
+      for (const entity of [...state.friends, ...state.enemies, ...state.projectiles, ...state.particles, ...state.nectarDrops]) { entity.x *= sx; entity.y *= sy; if (entity.baseY) entity.baseY *= sy; }
     }
   }
 
   function updateUI() {
-    ui.wave.textContent = state.wave; ui.health.textContent = state.health; ui.sparks.textContent = state.sparks;
+    ui.wave.textContent = state.wave; ui.health.textContent = state.health; ui.sparks.textContent = state.sparks; ui.nectar.textContent = state.nectar;
     ui.best.textContent = memory.bestWave || 0; ui.generation.textContent = String(state.generation).padStart(2, "0");
     ui.reroll.disabled = state.sparks < 1 || state.over || (!state.started && state.sparks === 1);
     ui.pause.disabled = state.over || !state.started;
@@ -486,6 +529,7 @@
   ui.forget.addEventListener("click", () => { memory = { lineages: [], generation: 1, bestWave: 0 }; saveMemory(); start(); announce("Evolutionary memory cleared"); });
   ui.sound.addEventListener("click", () => { muted = !muted; ui.sound.classList.toggle("muted", muted); ui.sound.setAttribute("aria-label", muted ? "Turn sound on" : "Turn sound off"); if (!muted) tone(520, .06); });
   ui.playAgain.addEventListener("click", start);
+  canvas.addEventListener("pointerdown", collectNectar);
   window.addEventListener("resize", resize);
   document.addEventListener("visibilitychange", () => { lastTime = performance.now(); updateUI(); });
 

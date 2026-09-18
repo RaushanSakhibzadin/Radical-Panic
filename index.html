@@ -14,7 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fredoka:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260918-faces-1" />
+    <link rel="stylesheet" href="styles.css?v=20260918-nectar-1" />
   </head>
   <body>
     <div class="noise" aria-hidden="true"></div>
@@ -28,6 +28,7 @@
           <div><span>Level</span><strong id="wave">1</strong></div>
           <div><span>Garden</span><strong id="garden-health">10</strong></div>
           <div><span>Sparks</span><strong id="sparks">3</strong></div>
+          <div><span>Nectar</span><strong id="nectar">0</strong></div>
           <div><span>Best</span><strong id="best-wave">0</strong></div>
         </div>
         <div class="header-actions">
@@ -69,7 +70,7 @@
             </div>
             <span class="generation">GEN <b id="generation">01</b></span>
           </div>
-          <p class="hint">Recruit for 1 spark. Friends fight automatically. Your picks shape future generations; skipped mutations return less often.</p>
+          <p class="hint">Recruit for 1 spark. Friends fight automatically and grow Nectar drops over time. Your picks shape future generations.</p>
           <div class="choices" id="choices"></div>
           <button class="skip-button" id="reroll" type="button">Shuffle mutations <span>costs 1 spark</span></button>
           <div class="legend">
@@ -102,6 +103,6 @@
       <canvas id="victory-emoji" width="600" height="600" aria-hidden="true"></canvas>
       <p id="victory-caption"></p>
     </div>
-    <script src="game.js?v=20260918-faces-1"></script>
+    <script src="game.js?v=20260918-nectar-1"></script>
   </body>
 </html>

@@ -29,7 +29,7 @@ function boot(saved, blocked = false) {
     localStorage: { getItem() { if (blocked) throw Error('Storage blocked'); return stored ?? null; }, setItem(_, value) { if (blocked) throw Error('Storage blocked'); stored = value; } },
     setTimeout() {}, clearTimeout() {}, requestAnimationFrame() {} });
   const source = fs.readFileSync(require.resolve('../game.js'), 'utf8').replace('start(); requestAnimationFrame(frame);',
-    'start(); globalThis.game = { get state() { return state; }, get memory() { return memory; }, selectOffer, randomGenome, chooseParent, rememberChoices, update, resize, draw, start, renderOffers, emotionFor, drawEmojiFace, EMOJI, RADICALS, affinity, damageMultiplier };');
+    'start(); globalThis.game = { get state() { return state; }, get memory() { return memory; }, selectOffer, randomGenome, chooseParent, rememberChoices, update, resize, draw, start, renderOffers, emotionFor, drawEmojiFace, EMOJI, RADICALS, RADICAL_COLORS, affinity, damageMultiplier };');
   vm.runInContext(source, context);
   return { game: context.game, elements, context, drawnText, textStyles, stored: () => stored };
 }
@@ -131,21 +131,45 @@ test('shuffling cannot spend the final spark before the first recruitment', () =
   assert.equal(game.state.friends.length, 1);
 });
 
-test('garden holds one row of four friends and rejects extra recruits before and after mobile resize', () => {
+test('garden holds one row of eight friends and rejects extra recruits before and after mobile resize', () => {
   const { game, elements } = boot(); game.state.sparks = 20;
-  for (let i = 0; i < 5; i++) game.selectOffer(game.state.offers[0]);
-  assert.equal(game.state.friends.length, 4);
-  assert.equal(game.state.sparks, 16);
+  for (let i = 0; i < 9; i++) game.selectOffer(game.state.offers[0]);
+  assert.equal(game.state.friends.length, 8);
+  assert.equal(game.state.sparks, 12);
   assert.ok(elements.get('#choices').children.every(button => button.disabled));
   function checkRows(height) {
     const rows = [...new Set(game.state.friends.map(friend => friend.y))].sort((a, b) => a - b);
     assert.equal(rows.length, 1);
-    assert.equal(new Set(game.state.friends.map(friend => friend.x)).size, 4);
+    assert.equal(new Set(game.state.friends.map(friend => friend.x)).size, 8);
     assert.ok(Math.abs(rows[0] / height - .83) < .000001);
   }
   checkRows(610);
   elements.get('#arena').getBoundingClientRect = () => ({ width: 368, height: 440 }); game.resize();
   checkRows(440);
+});
+
+test('planted friends generate clickable Nectar that returns one Spark', () => {
+  const { game, elements } = boot(); game.selectOffer(game.state.offers[0]);
+  const friend = game.state.friends[0]; friend.nectarTimer = .01;
+  game.update(.02);
+  assert.equal(game.state.nectarDrops.length, 1);
+  assert.equal(game.state.nectar, 0);
+  const drop = game.state.nectarDrops[0];
+  elements.get('#arena').events.pointerdown({ clientX: drop.x, clientY: drop.y });
+  assert.equal(game.state.nectarDrops.length, 0);
+  assert.equal(game.state.nectar, 1);
+  assert.equal(game.state.sparks, 3);
+});
+
+test('radicals use meaning colours and remain visible across every radical type', () => {
+  const { game, elements, drawnText } = boot();
+  for (const char of game.RADICALS) game.state.enemies.push({ char, x: 100, y: 100, size: 40, hp: 10, maxHp: 10, phase: 0, hit: 0 });
+  game.draw();
+  assert.equal(game.RADICALS.length, 14);
+  assert.equal(new Set(Object.values(game.RADICAL_COLORS)).size, 14);
+  assert.ok(elements.get('#arena'));
+  assert.ok(drawnText.some(([text]) => text === 'WATER'));
+  assert.ok(drawnText.some(([text]) => text === 'FIRE'));
 });
 
 test('planted emoji use opaque ink even after fading particles were drawn', () => {
