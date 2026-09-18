@@ -375,17 +375,13 @@
         }
         state.celebrating = false; ui.victory.hidden = true;
         state.wave++;
-        // Every level is a fresh draft. The garden does not carry over, so you
-        // choose a whole team each time instead of planting once in level 1 and
-        // watching it run. More picks also means a stronger selection signal, which
-        // is the point of the whole game.
-        state.friends = [];
-        state.projectiles = [];
-        state.nectarDrops = [];
-        state.shovelMode = false;
+        // The garden was already unplanted when the previous level was won, so
+        // there is nothing to clear here. Anything planted during the celebration
+        // is kept - the drafting window simply opened early - and in that case the
+        // level starts straight away instead of waiting.
         // `started` gates the wave the same way it gates level 1: nothing spawns
-        // until you have planted something, so you always get time to draft.
-        state.started = false;
+        // until something is planted, so you always get time to draft.
+        state.started = state.friends.length > 0;
         state.sparks = Math.min(SPARK_CAP, Math.max(state.sparks, levelSparks(state.wave)));
         state.spawnLeft = 4 + state.wave * 2;
         state.spawnTimer = .4;
@@ -399,7 +395,14 @@
       }
     } else if (!state.enemies.length) {
       state.wavePause = VICTORY_DURATION;
-      celebrateLevel();
+      celebrateLevel();   // picks its champion from the garden, so it runs first
+      // The garden is unplanted the instant the level is won, so you watch it clear
+      // rather than finding it gone after the celebration. Anything still pointing
+      // at a friend goes with it.
+      state.friends = [];
+      state.projectiles = [];
+      state.nectarDrops = [];
+      state.shovelMode = false;
       state.sparks = Math.min(SPARK_CAP, state.sparks + 2);
       decayLineages();
       memory.bestWave = Math.max(memory.bestWave || 0, state.wave);
