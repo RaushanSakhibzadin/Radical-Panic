@@ -82,7 +82,8 @@ test('defence reduces contact damage, HP depletion frees the same placement slot
   game.update(.1);
   assert.equal(game.state.friends.length, 1);
   game.selectOffer(game.state.offers[0]);
-  assert.equal(game.state.friends[1].slot, first.slot);
+  assert.equal(game.state.friends.length, 2);
+  assert.equal(new Set(game.state.friends.map(friend => friend.slot)).size, 2);
   assert.notEqual(game.state.friends[0].slot, game.state.friends[1].slot);
 });
 
@@ -158,7 +159,16 @@ test('shovel mode removes a planted friend and frees its exact slot without refu
   assert.equal(game.state.friends.some(friend => friend.slot === slot), false);
   assert.equal(game.state.sparks, sparks);
   game.selectOffer(game.state.offers[0]);
-  assert.equal(game.state.friends.at(-1).slot, slot);
+  assert.equal(game.state.friends.length, 2);
+  assert.equal(new Set(game.state.friends.map(friend => friend.slot)).size, 2);
+});
+
+test('new friends choose available planting slots in a random order', () => {
+  const { game } = boot(); game.state.sparks = 8;
+  for (let i = 0; i < 7; i++) game.selectOffer(game.state.offers[0]);
+  const slots = game.state.friends.map(friend => friend.slot);
+  assert.equal(new Set(slots).size, 7);
+  assert.notDeepEqual(slots.slice(0, 4), [0, 1, 2, 3]);
 });
 
 test('planted friends generate clickable Nectar that returns one Spark', () => {

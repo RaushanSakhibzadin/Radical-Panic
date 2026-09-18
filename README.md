@@ -32,6 +32,7 @@ node --test tests/game.test.cjs
 - Defeat incoming Kangxi radical characters before they reach the garden.
 - Meaning-based counters deal **2.5× damage**: water quenches fire, fire burns trees, plants absorb water, cold freezes water, and more. Each candidate shows its strong matchups; open **Meaning matters** for the complete rules. Neutral matchups deal normal damage.
 - The garden has one horizontal row with sixteen friend slots on every screen size.
+- New friends choose a random free slot, so planting grows the garden organically instead of filling from left to right.
 - Each planted friend generates a floating Nectar drop every few seconds. Click a drop to collect it; each Nectar gives one Spark so the garden can keep growing.
 - Radical colours follow their meaning: water is blue, fire orange, trees green, mountains purple, earth brown, sun gold, and moon indigo.
 - Level 1 starts with one clearly marked planting line. Every defender has eyes, a mouth and expressions that react to danger, damage and attacks; preview faces reflect their mutation traits.

@@ -193,7 +193,8 @@
   function addFriend(offer) {
     const g = offer.genome;
     const columns = GARDEN_COLUMNS;
-    const slot = Array.from({ length: GARDEN_CAPACITY }, (_, i) => i).find(i => !state.friends.some(f => f.slot === i));
+    const freeSlots = Array.from({ length: GARDEN_CAPACITY }, (_, i) => i).filter(i => !state.friends.some(f => f.slot === i));
+    const slot = pick(freeSlots);
     const col = slot % columns;
     const row = Math.floor(slot / columns);
     state.friends.push({
