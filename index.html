@@ -10,12 +10,15 @@
     <title>Radical Rascals</title>
     <!-- Fonts are served from this repository, not from Google. The game makes no
          third-party requests at all: nothing about a player reaches any other host. -->
-    <link rel="stylesheet" href="fonts.css?v=20260918-fixes-1" />
-    <link rel="stylesheet" href="styles.css?v=20260918-fixes-1" />
+    <link rel="stylesheet" href="fonts.css?v=20260918-nohero-1" />
+    <link rel="stylesheet" href="styles.css?v=20260918-nohero-1" />
   </head>
   <body>
     <div class="noise" aria-hidden="true"></div>
     <main class="shell">
+      <!-- The visible hero was removed. This keeps the document outline valid so a
+           screen reader still lands on the game's name rather than "Choose a friend". -->
+      <h1 class="visually-hidden">Radical Rascals</h1>
       <header class="topbar">
         <a class="brand" href="#" aria-label="Radical Rascals home">
           <span class="brand-mark">⼼</span>
@@ -34,16 +37,6 @@
           <a class="donate-button" href="https://github.com/sponsors/RaushanSakhibzadin" target="_blank" rel="noreferrer">Support ↗</a>
         </div>
       </header>
-
-      <section class="hero">
-        <div>
-          <p class="eyebrow">A tiny game that learns what you love</p>
-          <h1>Give them eyes.<br /><em>Help them evolve.</em></h1>
-        </div>
-        <p class="intro">
-          Pick an eyeless friend. Every choice helps its funniest little mutations return. Protect your garden through 300 levels of mischievous radicals.
-        </p>
-      </section>
 
       <section class="game-layout">
         <div class="arena-wrap">
@@ -101,6 +94,6 @@
       <canvas id="victory-emoji" width="600" height="600" aria-hidden="true"></canvas>
       <p id="victory-caption"></p>
     </div>
-    <script src="game.js?v=20260918-fixes-1"></script>
+    <script src="game.js?v=20260918-nohero-1"></script>
   </body>
 </html>
