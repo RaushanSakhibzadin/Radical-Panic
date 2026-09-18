@@ -14,8 +14,34 @@
   };
 
   const EMOJI = ["🌵", "🍄", "🌸", "🍀", "🌙", "⭐", "☁️", "🔥", "💧", "🍋", "🥑", "🪨", "🌷", "🌻", "🌼", "🌱", "🌿", "🍁", "🍂", "🍃", "🌾", "🌳", "🌲", "🌴", "🌰", "🍇", "🍈", "🍉", "🍊", "🍌", "🍍", "🥭", "🍎", "🍏", "🍐", "🍑", "🍒", "🍓", "🫐", "🥝", "🍅", "🥥", "🍆", "🥔", "🥕", "🌽", "🫑", "🥒", "🥬", "🥦", "🧄", "🧅", "🥜", "🍞", "🥐", "🥖", "🥨", "🥯", "🥞", "🧇", "🧀", "🍕", "🍿", "🍙", "🍚", "🍡", "🍦", "🍧", "🍨", "🍩", "🍪", "🎂", "🧁", "🍫", "🍬", "🍭", "🧊", "🧶", "🧵", "🧩", "🪁", "🫧", "❄️", "🌈"];
-  // The complete Kangxi Radicals block: U+2F00 through U+2FD5, all 214 radicals.
+  // Every Kangxi radical, in Unicode order: radical 1 is index 0, radical 214 is index 213.
+  // Each entry is the ordinary CJK ideograph (far better font coverage than the
+  // U+2F00 compatibility block) followed by its English name. Generated from the
+  // Unicode character database - see docs/RADICALS.md for the two deliberate overrides.
+  const RADICAL_TABLE = (
+    "一one|丨line|丶dot|丿slash|乙second|亅hook|二two|亠lid|人person|儿legs|入enter|八eight|冂down box|冖cover" +
+    "|冫ice|几table|凵open box|刀knife|力power|勹wrap|匕spoon|匚right open box|匸hiding enclosure|十ten" +
+    "|卜divination|卩seal|厂cliff|厶private|又again|口mouth|囗enclosure|土earth|士scholar|夂go|夊go slowly" +
+    "|夕evening|大big|女woman|子child|宀roof|寸inch|小small|尢lame|尸corpse|屮sprout|山mountain|巛river|工work" +
+    "|己oneself|巾turban|干dry|幺short thread|广dotted cliff|廴long stride|廾two hands|弋shoot|弓bow|彐snout" +
+    "|彡bristle|彳step|心heart|戈halberd|戶door|手hand|支branch|攴rap|文script|斗dipper|斤axe|方square|无not" +
+    "|日sun|曰say|月moon|木tree|欠lack|止stop|歹death|殳weapon|毋do not|比compare|毛fur|氏clan|气steam|水water" +
+    "|火fire|爪claw|父father|爻double x|爿half tree trunk|片slice|牙fang|牛cow|犬dog|玄profound|玉jade|瓜melon" +
+    "|瓦tile|甘sweet|生life|用use|田field|疋bolt of cloth|疒sickness|癶dotted tent|白white|皮skin|皿dish|目eye" +
+    "|矛spear|矢arrow|石stone|示spirit|禸track|禾grain|穴cave|立stand|竹bamboo|米rice|糸silk|缶jar|网net|羊sheep" +
+    "|羽feather|老old|而and|耒plow|耳ear|聿brush|肉meat|臣minister|自self|至arrive|臼mortar|舌tongue|舛oppose" +
+    "|舟boat|艮stopping|色color|艸grass|虍tiger|虫insect|血blood|行walk enclosure|衣clothes|襾west|見see" +
+    "|角horn|言speech|谷valley|豆bean|豕pig|豸badger|貝shell|赤red|走run|足foot|身body|車cart|辛bitter|辰morning" +
+    "|辵walk|邑city|酉wine|釆distinguish|里village|金gold|長long|門gate|阜mound|隶capture|隹short tailed bird" +
+    "|雨rain|靑blue|非wrong|面face|革leather|韋tanned leather|韭leek|音sound|頁leaf|風wind|飛fly|食eat|首head" +
+    "|香fragrant|馬horse|骨bone|高tall|髟hair|鬥fight|鬯sacrificial wine|鬲cauldron|鬼ghost|魚fish|鳥bird" +
+    "|鹵salt|鹿deer|麥wheat|麻hemp|黃yellow|黍millet|黑black|黹embroidery|黽frog|鼎tripod|鼓drum|鼠rat|鼻nose" +
+    "|齊even|齒tooth|龍dragon|龜turtle|龠flute"
+  ).split("|");
+  // Identity stays on the Kangxi block so saved games and the counter rules keep
+  // working; only what we DRAW comes from the table above.
   const RADICALS = Array.from({ length: 214 }, (_, index) => String.fromCodePoint(0x2F00 + index));
+  const RADICAL_INDEX = new Map(RADICALS.map((char, index) => [char, index]));
   // Semantic advantages, not arbitrary colour matchups. Unlisted emoji and
   // abstract radicals are neutral; this is a game rule, not language instruction.
   const AFFINITIES = {
@@ -44,14 +70,42 @@
   const affinity = emoji => Object.entries(AFFINITIES).find(([, group]) => group.emoji.includes(emoji))?.[0] || "neutral";
   const counters = emoji => RADICALS.filter(radical => (RADICAL_INFO[radical]?.counters || []).includes(affinity(emoji)));
   const damageMultiplier = (emoji, radical) => RADICAL_INFO[radical]?.counters.includes(affinity(emoji)) ? 2.5 : 1;
-  const radicalLabel = radical => RADICAL_INFO[radical]?.name || `radical ${String(RADICALS.indexOf(radical) + 1).padStart(3, "0")}`;
+  // Every radical has a real English name. Before, only the fourteen hand-written
+  // entries in RADICAL_INFO did, and the other two hundred showed as "RADICAL 087".
+  const radicalLabel = radical => {
+    const index = RADICAL_INDEX.get(radical);
+    return index === undefined ? "radical" : RADICAL_TABLE[index].slice(1);
+  };
+  // Draw the ordinary CJK ideograph rather than the U+2F00 compatibility character.
+  // Both mean the same radical, but 水 is in every CJK font and ⽔ is in far fewer,
+  // so the compatibility codepoint renders as tofu on a lot of machines.
+  const radicalGlyph = radical => {
+    const index = RADICAL_INDEX.get(radical);
+    return index === undefined ? radical : RADICAL_TABLE[index][0];
+  };
+  // Radicals whose meaning drives the counter rules keep their meaning colour; the
+  // rest get a stable, evenly spread hue so two attackers on screen never look alike.
+  const radicalColor = radical => {
+    if (RADICAL_COLORS[radical]) return RADICAL_COLORS[radical];
+    const index = RADICAL_INDEX.get(radical);
+    if (index === undefined) return "#53606b";
+    return `hsl(${(index * 137.508) % 360}deg 34% 42%)`;
+  };
   const NAMES = ["Wobble", "Pip", "Sprig", "Mochi", "Bumble", "Peep", "Noodle", "Midge", "Tumble", "Bean", "Doodle", "Fizz"];
   const COLORS = ["#ffd47e", "#ffad91", "#a8d9a1", "#9bcaf2", "#d8b7ec", "#f6acc5"];
   const STORAGE_KEY = "radical-rascals-evolution-v1";
   const GARDEN_ROWS = 1, GARDEN_COLUMNS = 16, GARDEN_TOP = .72, GARDEN_BOTTOM = .94;
   const GARDEN_CAPACITY = GARDEN_ROWS * GARDEN_COLUMNS;
   const SPARK_CAP = 12;
+  const POOL_LIMIT = 60;            // total lineages remembered
+  const LINEAGES_PER_EMOJI = 4;     // so >= POOL_LIMIT / 4 species always coexist
+  const PICK_FITNESS = 1.6;         // fitness a freshly planted lineage enters with
+  const FITNESS_CAP = 8, FITNESS_FLOOR = .15;
+  const FITNESS_DECAY = .97;        // applied to every lineage per cleared wave
+  const NOVELTY_CHANCE = .23;       // chance of drafting an entirely new lineage
   const MAX_LEVEL = 300;
+  const PREVIEW_SIZE = 96, PREVIEW_SCALE = 1.15;
+  const HAN_FONT = '"Noto Sans SC", "Noto Sans CJK SC", "Source Han Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "WenQuanYi Micro Hei", "Heiti SC", sans-serif';
   const VICTORY_DURATION = 3.2;
   const GENES = ["power", "defence", "speed", "life", "range", "wobble", "bounce", "eyeSize", "eyeGap"];
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -69,6 +123,7 @@
   let audioContext = null;
   let muted = false;
   let messageTimer;
+  let labelBoxes = [];   // per-frame record of drawn enemy labels, for collision avoidance
 
   function freshState() {
     return {
@@ -85,7 +140,7 @@
       const lineages = saved.lineages.filter(item => item && EMOJI.includes(item.emoji) && NAMES.includes(item.name) && COLORS.includes(item.color)
         && typeof item.id === "string" && Number.isFinite(item.fitness) && item.genome
         && GENES.every(key => key === "defence" || Number.isFinite(item.genome[key])) && Number.isFinite(item.genome.tilt))
-        .slice(0, 60).map(item => ({ ...item, fitness: clamp(item.fitness, .15, 8), genome: {
+        .slice(0, POOL_LIMIT).map(item => ({ ...item, depth: Number.isSafeInteger(item.depth) && item.depth >= 0 ? item.depth : 0, fitness: clamp(item.fitness, FITNESS_FLOOR, FITNESS_CAP), genome: {
           ...Object.fromEntries(GENES.map(key => [key, clamp(item.genome[key] ?? .5, .08, .95)])), tilt: clamp(item.genome.tilt, -.28, .28)
         } }));
       return { lineages, generation: Number.isSafeInteger(saved.generation) && saved.generation > 0 ? saved.generation : 1,
@@ -113,7 +168,7 @@
   }
 
   function chooseParent() {
-    if (!memory.lineages.length || Math.random() < .23) return null;
+    if (!memory.lineages.length || Math.random() < NOVELTY_CHANCE) return null;
     const total = memory.lineages.reduce((sum, item) => sum + Math.max(.15, item.fitness), 0);
     let roll = Math.random() * total;
     for (const item of memory.lineages) {
@@ -123,17 +178,65 @@
     return memory.lineages[0];
   }
 
+  // Keep the pool from becoming a monoculture.
+  //
+  // It used to be a flat list trimmed to the top 60 by fitness. Because a chosen
+  // lineage enters at PICK_FITNESS and an established one climbs to FITNESS_CAP,
+  // the floor eventually rose above the entry fitness and NO new lineage could
+  // ever survive its first trim again - the 23% novelty roll produced an offer
+  // that was discarded the instant it was stored. A consistent player ended up
+  // with one emoji and one name forever.
+  //
+  // Two changes fix it. A per-species cap means no single emoji can own more than
+  // LINEAGES_PER_EMOJI of the 60 slots, so at least 60/4 = 15 species always
+  // coexist and there is always room for a newcomer. And fitness decays each wave,
+  // so a favourite you have stopped picking gradually yields its slot instead of
+  // holding it forever.
+  function trimLineages() {
+    const kept = [], perEmoji = new Map();
+    for (const item of [...memory.lineages].sort((a, b) => b.fitness - a.fitness)) {
+      const used = perEmoji.get(item.emoji) || 0;
+      if (used >= LINEAGES_PER_EMOJI) continue;
+      perEmoji.set(item.emoji, used + 1);
+      kept.push(item);
+      if (kept.length >= POOL_LIMIT) break;
+    }
+    memory.lineages = kept;
+  }
+
+  // Called once per cleared wave. Everything fades a little, so yesterday's
+  // favourite has to keep being picked to stay in the pool.
+  function decayLineages() {
+    for (const item of memory.lineages) item.fitness *= FITNESS_DECAY;
+    memory.lineages = memory.lineages.filter(item => item.fitness > FITNESS_FLOOR);
+    trimLineages();
+  }
+
   function makeOffer() {
     const parent = chooseParent();
     return {
       id: id(), emoji: parent ? parent.emoji : pick(EMOJI),
       name: parent ? parent.name : pick(NAMES),
-      color: parent?.color || pick(COLORS), genome: randomGenome(parent?.genome), parentId: parent?.id || null
+      color: parent?.color || pick(COLORS), genome: randomGenome(parent?.genome), parentId: parent?.id || null,
+      // How many ancestors deep this candidate is. "GEN" used to show the number of
+      // picks in the run, which is not a generation at all.
+      depth: parent ? (parent.depth || 0) + 1 : 0
     };
   }
 
   function refillOffers() {
-    state.offers = [makeOffer(), makeOffer(), makeOffer()];
+    // Draw three genuinely different candidates. Weighted sampling happily returns
+    // the same favourite lineage three times, which is a non-choice: the tray is
+    // where selection happens, so it has to offer something to select between.
+    const offers = [];
+    for (let slot = 0; slot < 3; slot++) {
+      let candidate = makeOffer();
+      for (let tries = 0; tries < 8 && offers.some(other => other.emoji === candidate.emoji); tries++) {
+        candidate = makeOffer();
+      }
+      offers.push(candidate);
+    }
+    state.offers = offers;
     renderOffers();
   }
 
@@ -153,14 +256,38 @@
       button.style.setProperty("--tempo", `${2 * Math.PI / (2.5 + offer.genome.speed * 3)}s`);
       const advantages = counters(offer.emoji);
       const mood = previewEmotion(offer);
-      const matchup = advantages.length ? `2.5× vs ${advantages.join(" ")}` : "Steady vs all radicals";
-      button.setAttribute("aria-label", `${offer.name}, ${offer.emoji}. Attack ${Math.round(4 + offer.genome.power * 12)}, defence ${Math.round(offer.genome.defence * 65)}%, HP ${Math.round(35 + offer.genome.life * 80)}, speed ${(1 / (1.15 - offer.genome.speed * .72)).toFixed(1)} attacks per second. ${advantages.length ? `2.5 times damage against ${advantages.map(char => RADICAL_INFO[char].name).join(', ')}.` : 'Normal damage against all radicals.'} Recruit for 1 spark.`);
-      button.innerHTML = `
-        <span class="specimen" data-emotion="${mood}"><span>${offer.emoji}</span><span class="mini-eyes"><i></i><i></i></span><span class="mini-mouth"></span></span>
-        <span class="choice-copy"><strong>${offer.name}</strong><small>mutation ${String(state.generation).padStart(2, "0")}.${index + 1}</small>
+      // Sighted players used to get raw glyphs ("2.5x vs the-water-radical") while the
+      // aria-label got readable English. Both get English now.
+      const matchup = advantages.length
+        ? `2.5× vs ${advantages.map(radicalLabel).join(", ")}`
+        : "Steady vs all radicals";
+      button.setAttribute("aria-label", `${offer.name}, ${offer.emoji}. Attack ${Math.round(4 + offer.genome.power * 12)}, defence ${Math.round(offer.genome.defence * 65)}%, HP ${Math.round(35 + offer.genome.life * 80)}, speed ${(1 / (1.15 - offer.genome.speed * .72)).toFixed(1)} attacks per second. ${advantages.length ? `2.5 times damage against ${advantages.map(radicalLabel).join(', ')}.` : 'Normal damage against all radicals.'} Recruit for 1 spark.`);
+      // The face in the card is painted by drawEmojiFace - the very same routine the
+      // arena uses. It used to be a separate CSS drawing with different eye
+      // proportions, no eyebrows and a different mouth, which meant you were
+      // selecting on a picture that was not what you would get.
+      const specimen = document.createElement("span");
+      specimen.className = "specimen";
+      specimen.setAttribute("data-emotion", mood);
+      const art = document.createElement("canvas");
+      art.className = "specimen-art";
+      art.width = PREVIEW_SIZE; art.height = PREVIEW_SIZE;
+      specimen.append(art);
+      offer.art = art;
+
+      const copy = document.createElement("span");
+      copy.className = "choice-copy";
+      copy.innerHTML = `<strong>${offer.name}</strong><small>mutation ${String(state.generation).padStart(2, "0")}.${index + 1}</small>
           <span class="bars"><span class="bar" title="Attack"><i style="width:${offer.genome.power * 100}%"></i></span><span class="bar" title="Speed"><i style="width:${offer.genome.speed * 100}%"></i></span><span class="bar" title="HP"><i style="width:${offer.genome.life * 100}%"></i></span><span class="bar" title="Defence"><i style="width:${offer.genome.defence * 100}%"></i></span></span>
-          <span class="matchup">${matchup}</span>
-        </span><span class="pick-arrow">↗</span>`;
+          <span class="matchup">${matchup}</span>`;
+
+      const arrow = document.createElement("span");
+      arrow.className = "pick-arrow";
+      arrow.textContent = "↗";
+
+      button.append(specimen);
+      button.append(copy);
+      button.append(arrow);
       button.addEventListener("click", () => selectOffer(offer));
       ui.choices.append(button);
     });
@@ -170,7 +297,7 @@
     if (state.sparks < 1 || state.over || state.friends.length >= GARDEN_CAPACITY || !state.offers.includes(offer)) return;
     state.sparks--;
     state.started = true;
-    state.generation++;
+    state.generation = Math.max(state.generation, (offer.depth || 0) + 1);
     memory.generation = state.generation;
     rememberChoices(offer);
     addFriend(offer);
@@ -185,10 +312,14 @@
     for (const other of state.offers) {
       const chosen = other === selected;
       if (other.parentId) adjustments.set(other.parentId, (adjustments.get(other.parentId) || 0) + (chosen ? .45 : -.08));
-      memory.lineages.push({ ...other, fitness: chosen ? 1.6 : .25 });
+      // Only what the player actually planted is enrolled as a lineage. Storing the
+      // rejected two as well filled the pool with noise that crowded out newcomers;
+      // their parents are still penalised through `adjustments` below, which is the
+      // whole signal a rejection carries.
+      if (chosen) memory.lineages.push({ ...other, fitness: PICK_FITNESS });
     }
-    for (const item of memory.lineages) item.fitness = clamp(item.fitness + (adjustments.get(item.id) || 0), .15, 8);
-    if (memory.lineages.length > 60) memory.lineages.sort((a, b) => b.fitness - a.fitness).length = 60;
+    for (const item of memory.lineages) item.fitness = clamp(item.fitness + (adjustments.get(item.id) || 0), FITNESS_FLOOR, FITNESS_CAP);
+    trimLineages();
     saveMemory();
   }
 
@@ -248,6 +379,7 @@
       state.wavePause = VICTORY_DURATION;
       celebrateLevel();
       state.sparks = Math.min(SPARK_CAP, state.sparks + 2);
+      decayLineages();
       memory.bestWave = Math.max(memory.bestWave || 0, state.wave);
       saveMemory(); updateUI(); renderOffers();
       announce("Garden safe — +2 sparks");
@@ -299,7 +431,7 @@
 
     for (let i = state.enemies.length - 1; i >= 0; i--) {
       const enemy = state.enemies[i];
-      enemy.phase += dt * 2; enemy.hit -= dt; enemy.counterHit = Math.max(0, (enemy.counterHit || 0) - dt);
+      enemy.phase += dt * 2; enemy.hit = Math.max(0, enemy.hit - dt); enemy.counterHit = Math.max(0, (enemy.counterHit || 0) - dt);
       const defender = state.friends.find(friend => Math.hypot(friend.x - enemy.x, friend.y - enemy.y) < 42);
       if (defender) {
         defender.hurtFace = .4;
@@ -355,6 +487,7 @@
       ctx.fillStyle = "#ffffff70"; ctx.beginPath(); ctx.ellipse(x, plantingY + 27, 23, 7, 0, 0, Math.PI * 2); ctx.fill();
     }
 
+    labelBoxes.length = 0;
     for (const drop of state.nectarDrops) drawNectar(drop);
     for (const friend of state.friends) drawFriend(friend);
     for (const enemy of state.enemies) drawEnemy(enemy);
@@ -411,6 +544,27 @@
     if (index < 0) return;
     state.nectarDrops.splice(index, 1); state.nectar++; state.sparks = Math.min(SPARK_CAP, state.sparks + 1);
     updateUI(); renderOffers(); tone(720, .07, "sine"); announce("Nectar collected — +1 spark");
+  }
+
+  // Runs every frame, including while the game is paused or not yet started, so a
+  // candidate's motion genes are visible before you spend a spark on it.
+  function drawOfferPreviews(clock) {
+    for (const offer of state.offers) {
+      const art = offer.art;
+      if (!art) continue;
+      const pen = art.getContext("2d");
+      const g = offer.genome;
+      pen.clearRect(0, 0, PREVIEW_SIZE, PREVIEW_SIZE);
+      pen.save();
+      pen.translate(PREVIEW_SIZE / 2, PREVIEW_SIZE / 2);
+      const bounce = reducedMotion.matches ? 0 : Math.sin(clock * (2.5 + g.speed * 3)) * g.bounce * 7;
+      const wobble = (reducedMotion.matches ? 0 : Math.sin(clock * 2) * g.wobble * .15) + g.tilt;
+      pen.translate(0, bounce);
+      pen.rotate(wobble);
+      pen.scale(PREVIEW_SCALE, PREVIEW_SCALE);
+      drawEmojiFace(pen, offer, previewEmotion(offer));
+      pen.restore();
+    }
   }
 
   function previewEmotion(friend) {
@@ -480,27 +634,44 @@
   function drawEnemy(enemy) {
     ctx.save(); ctx.translate(enemy.x, enemy.y); ctx.rotate(reducedMotion.matches ? 0 : Math.sin(enemy.phase) * .1);
     if (enemy.hit > 0) { ctx.shadowColor = "white"; ctx.shadowBlur = 16; }
-    ctx.font = `700 ${enemy.size}px "Fredoka", sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillStyle = enemy.hit > 0 ? "#ff6d4a" : (RADICAL_COLORS[enemy.char] || "#53606b"); ctx.fillText(enemy.char, 0, 0); ctx.restore();
+    // Fredoka carries no CJK glyphs, so name the CJK families explicitly instead of
+    // silently falling through to whatever `sans-serif` happens to resolve to.
+    ctx.font = `700 ${enemy.size}px ${HAN_FONT}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = enemy.hit > 0 ? "#ff6d4a" : radicalColor(enemy.char); ctx.fillText(radicalGlyph(enemy.char), 0, 0); ctx.restore();
+    ctx.fillStyle = "rgba(23,34,28,.17)"; ctx.fillRect(enemy.x - 15, enemy.y - enemy.size * .7, 30, 2);
+    ctx.fillStyle = "#ff6d4a"; ctx.fillRect(enemy.x - 15, enemy.y - enemy.size * .7, 30 * clamp(enemy.hp / enemy.maxHp, 0, 1), 2);
     ctx.font = '500 9px "DM Mono", monospace'; ctx.textAlign = "center"; ctx.textBaseline = "top";
     const label = radicalLabel(enemy.char).toUpperCase();
     const labelWidth = ctx.measureText(label).width + 8;
     const labelX = clamp(enemy.x, labelWidth / 2 + 2, width - labelWidth / 2 - 2);
-    ctx.fillStyle = "rgba(255,253,247,.85)"; ctx.fillRect(labelX - labelWidth / 2, enemy.y + enemy.size * .52, labelWidth, 13);
-    ctx.fillStyle = "#17221c"; ctx.fillText(label, labelX, enemy.y + enemy.size * .52 + 2);
-    ctx.fillStyle = "rgba(23,34,28,.17)"; ctx.fillRect(enemy.x - 15, enemy.y - enemy.size * .7, 30, 2);
-    ctx.fillStyle = "#ff6d4a"; ctx.fillRect(enemy.x - 15, enemy.y - enemy.size * .7, 30 * clamp(enemy.hp / enemy.maxHp, 0, 1), 2);
+    // Two radicals close together used to print their names on top of each other.
+    // Step this one down until it has a clear line; give up rather than add to a pile.
+    let labelY = enemy.y + enemy.size * .52;
+    const overlaps = y => labelBoxes.some(box =>
+      Math.abs(box.y - y) < 13 && Math.abs(box.x - labelX) < (box.w + labelWidth) / 2);
+    let attempts = 0;
+    while (overlaps(labelY) && attempts++ < 4) labelY += 14;
+    if (overlaps(labelY)) return;
+    labelBoxes.push({ x: labelX, y: labelY, w: labelWidth });
+    ctx.fillStyle = "rgba(255,253,247,.85)"; ctx.fillRect(labelX - labelWidth / 2, labelY, labelWidth, 13);
+    ctx.fillStyle = "#17221c"; ctx.fillText(label, labelX, labelY + 2);
+
   }
 
   function resize() {
     const rect = canvas.getBoundingClientRect();
     const dpr = Math.min(devicePixelRatio || 1, 2);
     const oldW = width, oldH = height;
+    // A hidden or not-yet-laid-out canvas reports 0x0. Rescaling by width/0 gave
+    // Infinity, then NaN, and every friend was silently lost for the rest of the
+    // run. Keep the last good size instead; the next real layout pass fixes it.
+    if (!(rect.width > 0) || !(rect.height > 0)) return;
     width = rect.width; height = rect.height;
     canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     if (state) {
-      const sx = width / oldW, sy = height / oldH;
+      const sx = oldW > 0 ? width / oldW : 1, sy = oldH > 0 ? height / oldH : 1;
+      if (!Number.isFinite(sx) || !Number.isFinite(sy)) return;
       for (const entity of [...state.friends, ...state.enemies, ...state.projectiles, ...state.particles, ...state.nectarDrops]) { entity.x *= sx; entity.y *= sy; if (entity.baseY) entity.baseY *= sy; }
     }
   }
@@ -555,8 +726,11 @@
   window.addEventListener("resize", resize);
   document.addEventListener("visibilitychange", () => { lastTime = performance.now(); updateUI(); });
 
+  let previewClock = 0;
   function frame(now) {
-    const dt = Math.min((now - lastTime) / 1000, .035); lastTime = now; update(dt); draw(); requestAnimationFrame(frame);
+    const dt = Math.min((now - lastTime) / 1000, .035); lastTime = now;
+    previewClock += dt;
+    update(dt); draw(); drawOfferPreviews(previewClock); requestAnimationFrame(frame);
   }
 
   start(); requestAnimationFrame(frame);
