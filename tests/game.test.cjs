@@ -175,7 +175,7 @@ test('new friends choose available planting slots in a random order', () => {
   assert.notDeepEqual(slots.slice(0, 4), [0, 1, 2, 3]);
 });
 
-test('Nectar banks itself in the top-right corner without being chased', () => {
+test('Nectar sinks to the bottom centre and banks itself without being chased', () => {
   const { game } = boot(); game.selectOffer(game.state.offers[0]);
   const friend = game.state.friends[0]; friend.nectarTimer = .01;
   game.update(.02);
@@ -189,10 +189,15 @@ test('Nectar banks itself in the top-right corner without being chased', () => {
   assert.equal(game.state.nectarDrops.length, 1, 'it should linger briefly before leaving');
   assert.ok(Math.abs(drop.x - startX) < 1, 'and not set off sideways yet');
 
-  // Then it heads for the corner on its own.
-  game.update(.4);
-  assert.ok(drop.x > startX, 'it must travel right');
-  assert.ok(drop.y < startY, 'and upward');
+  // Then it sinks toward the bottom centre on its own. Step in real frames rather
+  // than one big dt: the hover has to elapse first, and the trip is then short
+  // enough that a single large step would bank it before we could look.
+  const centre = 791 / 2;   // the harness canvas is 791 wide
+  for (let i = 0; i < 22; i++) game.update(1 / 60);
+  assert.equal(game.state.nectarDrops.length, 1, 'still in flight');
+  assert.ok(drop.y > startY, 'it must travel downward');
+  assert.ok(Math.abs(drop.x - centre) < Math.abs(startX - centre),
+    'and move toward the centre');
 
   // And banks itself, with no tap anywhere.
   const sparks = game.state.sparks;
