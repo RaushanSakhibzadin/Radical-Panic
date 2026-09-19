@@ -105,12 +105,42 @@
   const PICK_FITNESS = 1.6;         // fitness a freshly planted lineage enters with
   const FITNESS_CAP = 8, FITNESS_FLOOR = .15;
   const FITNESS_DECAY = .97;        // applied to every lineage per cleared wave
+  const GROW_FITNESS = .5;          // spending sparks on a lineage is a loud preference
   const NOVELTY_CHANCE = .23;       // chance of drafting an entirely new lineage
   const MAX_LEVEL = 300;
   const PREVIEW_SIZE = 96, PREVIEW_SCALE = 1.15;
   const HAN_FONT = '"Noto Sans SC", "Noto Sans CJK SC", "Source Han Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "WenQuanYi Micro Hei", "Heiti SC", sans-serif';
   const VICTORY_DURATION = 3.2;
-  const GENES = ["power", "defence", "speed", "life", "range", "wobble", "bounce", "eyeSize", "eyeGap"];
+  const GENES = ["power", "defence", "speed", "life", "range", "wobble", "bounce", "eyeSize", "eyeGap", "role"];
+  // Genes added after a save format shipped. Old saves simply do not have them, so
+  // they are defaulted rather than causing the lineage to be thrown away.
+  const OPTIONAL_GENES = new Set(["defence", "role"]);
+
+  // What a friend DOES, not just how big its numbers are. The role is carried by a
+  // gene, so it mutates and is inherited like everything else: a lineage you keep
+  // planting drifts towards the job you keep picking it for, and a mutation can
+  // turn a shooter's child into a wall.
+  const ROLES = {
+    sprout:  { label: "Sprout",  blurb: "steady shot",      hp: 1,    dmg: 1,   rate: 1,   range: 1,   nectar: 1,  accent: "#7cc96b" },
+    grower:  { label: "Grower",  blurb: "rich in Nectar",   hp: 1.1,  dmg: .35, rate: .7,  range: .6,  nectar: 3,  accent: "#f4b942" },
+    bulwark: { label: "Bulwark", blurb: "soaks the hit",    hp: 3.2,  dmg: .25, rate: .6,  range: .45, nectar: .6, accent: "#9a7b5a" },
+    frost:   { label: "Frost",   blurb: "chills radicals",  hp: .9,   dmg: .7,  rate: 1,   range: 1.1, nectar: 1,  accent: "#6fb7e8", chills: true },
+    lobber:  { label: "Lobber",  blurb: "splash, hits far", hp: .95,  dmg: 1.2, rate: .65, range: 1.3, nectar: .9, accent: "#c77ad4", lobs: true },
+  };
+  // Band edges over the role gene, spread across its full legal span (.08-.95) so
+  // every job is actually reachable. Sprout takes the widest band, since the plain
+  // shooter should be the most common thing you are offered.
+  const ROLE_BANDS = [[.32, "sprout"], [.48, "grower"], [.63, "bulwark"], [.79, "frost"], [1, "lobber"]];
+  const roleOf = genome => ROLE_BANDS.find(([edge]) => (genome.role ?? .5) < edge)[1];
+
+  // Upgrading, PvZ-style, but paid for in the same sparks you would spend on a new
+  // recruit - so every level is a real choice between a wider garden and a
+  // stronger one. Tier 1 is what you plant; 3 is the ceiling.
+  const GROW_COSTS = [0, 2, 3];
+  const MAX_TIER = 3;
+  const tierPower = tier => 1 + (tier - 1) * .55;
+  const tierRate = tier => 1 + (tier - 1) * .12;
+  const baseHp = (genome, tier) => (35 + genome.life * 80) * ROLES[roleOf(genome)].hp * tierPower(tier);
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
   const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
@@ -142,7 +172,7 @@
       if (!saved || !Array.isArray(saved.lineages)) return { lineages: [], generation: 1, bestWave: 0 };
       const lineages = saved.lineages.filter(item => item && EMOJI.includes(item.emoji) && NAMES.includes(item.name) && COLORS.includes(item.color)
         && typeof item.id === "string" && Number.isFinite(item.fitness) && item.genome
-        && GENES.every(key => key === "defence" || Number.isFinite(item.genome[key])) && Number.isFinite(item.genome.tilt))
+        && GENES.every(key => OPTIONAL_GENES.has(key) || Number.isFinite(item.genome[key])) && Number.isFinite(item.genome.tilt))
         .slice(0, POOL_LIMIT).map(item => ({ ...item, depth: Number.isSafeInteger(item.depth) && item.depth >= 0 ? item.depth : 0, fitness: clamp(item.fitness, FITNESS_FLOOR, FITNESS_CAP), genome: {
           ...Object.fromEntries(GENES.map(key => [key, clamp(item.genome[key] ?? .5, .08, .95)])), tilt: clamp(item.genome.tilt, -.28, .28)
         } }));
@@ -161,12 +191,16 @@
   }
 
   function randomGenome(parent) {
-    const base = parent || Object.fromEntries(GENES.map(key => [key, random(.15, .85)]));
+    const base = parent || Object.fromEntries(GENES.map(key => [key, key === "role" ? random(.08, .95) : random(.15, .85)]));
     const mutate = (value, amount = .12) => clamp(value + random(-amount, amount), .08, .95);
     return {
       power: mutate(base.power), defence: mutate(base.defence), speed: mutate(base.speed), life: mutate(base.life), range: mutate(base.range),
       wobble: mutate(base.wobble), bounce: mutate(base.bounce), eyeSize: mutate(base.eyeSize),
-      eyeGap: mutate(base.eyeGap), tilt: clamp((base.tilt || 0) + random(-.08, .08), -.28, .28)
+      eyeGap: mutate(base.eyeGap),
+      // A smaller step than the rest: a role should drift across a few generations,
+      // not flip every time you plant a child.
+      role: mutate(base.role ?? random(.08, .95), .07),
+      tilt: clamp((base.tilt || 0) + random(-.08, .08), -.28, .28)
     };
   }
 
@@ -215,8 +249,19 @@
     trimLineages();
   }
 
-  function makeOffer() {
-    const parent = chooseParent();
+  // `taken` is the set of emoji already on the tray. Passing it lets the draft
+  // guarantee a distinct candidate rather than hoping a retry lands one.
+  function makeOffer(taken) {
+    const parent = taken && taken.size ? chooseParentAvoiding(taken) : chooseParent();
+    if (!parent && taken && taken.size) {
+      // Nothing usable in the pool, so found a brand new lineage on an emoji that
+      // is not already being offered.
+      const fresh = EMOJI.filter(emoji => !taken.has(emoji));
+      return {
+        id: id(), emoji: fresh.length ? pick(fresh) : pick(EMOJI), name: pick(NAMES),
+        color: pick(COLORS), genome: randomGenome(), parentId: null, depth: 0
+      };
+    }
     return {
       id: id(), emoji: parent ? parent.emoji : pick(EMOJI),
       name: parent ? parent.name : pick(NAMES),
@@ -232,16 +277,28 @@
   // emoji is a curtain between levels, not part of either one.
   const trayLocked = () => state.over || state.celebrating || state.wavePause > 0;
 
+  // Weighted sampling happily returns the same favourite lineage three times, which
+  // is a non-choice: the tray is where selection happens, so it has to offer
+  // something to select between. Skipping the pool entries whose emoji is already
+  // on the tray makes that a guarantee rather than a matter of luck.
+  function chooseParentAvoiding(taken) {
+    const usable = memory.lineages.filter(item => !taken.has(item.emoji));
+    if (!usable.length || Math.random() < NOVELTY_CHANCE) return null;
+    const total = usable.reduce((sum, item) => sum + Math.max(.15, item.fitness), 0);
+    let roll = Math.random() * total;
+    for (const item of usable) {
+      roll -= Math.max(.15, item.fitness);
+      if (roll <= 0) return item;
+    }
+    return usable[usable.length - 1];
+  }
+
   function refillOffers() {
-    // Draw three genuinely different candidates. Weighted sampling happily returns
-    // the same favourite lineage three times, which is a non-choice: the tray is
-    // where selection happens, so it has to offer something to select between.
     const offers = [];
+    const taken = new Set();
     for (let slot = 0; slot < 3; slot++) {
-      let candidate = makeOffer();
-      for (let tries = 0; tries < 8 && offers.some(other => other.emoji === candidate.emoji); tries++) {
-        candidate = makeOffer();
-      }
+      const candidate = makeOffer(taken);
+      taken.add(candidate.emoji);
       offers.push(candidate);
     }
     state.offers = offers;
@@ -264,12 +321,13 @@
       button.style.setProperty("--tempo", `${2 * Math.PI / (2.5 + offer.genome.speed * 3)}s`);
       const advantages = counters(offer.emoji);
       const mood = previewEmotion(offer);
+      const offerRole = ROLES[roleOf(offer.genome)];
       // Sighted players used to get raw glyphs ("2.5x vs the-water-radical") while the
       // aria-label got readable English. Both get English now.
       const matchup = advantages.length
         ? `2.5× vs ${advantages.map(radicalLabel).join(", ")}`
         : "Steady vs all radicals";
-      button.setAttribute("aria-label", `${offer.name}, ${offer.emoji}. Attack ${Math.round(4 + offer.genome.power * 12)}, defence ${Math.round(offer.genome.defence * 65)}%, HP ${Math.round(35 + offer.genome.life * 80)}, speed ${(1 / (1.15 - offer.genome.speed * .72)).toFixed(1)} attacks per second. ${advantages.length ? `2.5 times damage against ${advantages.map(radicalLabel).join(', ')}.` : 'Normal damage against all radicals.'} Recruit for 1 spark.`);
+      button.setAttribute("aria-label", `${offer.name}, ${offer.emoji}, ${offerRole.label}: ${offerRole.blurb}. Attack ${Math.round(4 + offer.genome.power * 12)}, defence ${Math.round(offer.genome.defence * 65)}%, HP ${Math.round(35 + offer.genome.life * 80)}, speed ${(1 / (1.15 - offer.genome.speed * .72)).toFixed(1)} attacks per second. ${advantages.length ? `2.5 times damage against ${advantages.map(radicalLabel).join(', ')}.` : 'Normal damage against all radicals.'} Recruit for 1 spark.`);
       // The face in the card is painted by drawEmojiFace - the very same routine the
       // arena uses. It used to be a separate CSS drawing with different eye
       // proportions, no eyebrows and a different mouth, which meant you were
@@ -285,7 +343,7 @@
 
       const copy = document.createElement("span");
       copy.className = "choice-copy";
-      copy.innerHTML = `<strong>${offer.name}</strong><small>mutation ${String(state.generation).padStart(2, "0")}.${index + 1}</small>
+      copy.innerHTML = `<strong>${offer.name}</strong><small><b class="role" style="color:${offerRole.accent}">${offerRole.label}</b> · ${offerRole.blurb}</small>
           <span class="bars"><span class="bar" title="Attack"><i style="width:${offer.genome.power * 100}%"></i></span><span class="bar" title="Speed"><i style="width:${offer.genome.speed * 100}%"></i></span><span class="bar" title="HP"><i style="width:${offer.genome.life * 100}%"></i></span><span class="bar" title="Defence"><i style="width:${offer.genome.defence * 100}%"></i></span></span>
           <span class="matchup">${matchup}</span>`;
 
@@ -338,9 +396,14 @@
     const slot = pick(freeSlots);
     const col = slot % columns;
     const row = Math.floor(slot / columns);
+    const role = roleOf(g);
+    const hp = baseHp(g, 1);
     state.friends.push({
-      ...offer, slot, x: slotX(slot), y: height * (GARDEN_TOP + (row + .5) * (GARDEN_BOTTOM - GARDEN_TOP) / GARDEN_ROWS),
-      hp: 35 + g.life * 80, maxHp: 35 + g.life * 80, cooldown: random(0, .7), age: random(0, 10), blink: random(1, 4), attackFace: 0, hurtFace: 0, nectarTimer: random(3.5, 6.5)
+      ...offer, slot, role, tier: 1,
+      x: slotX(slot), y: height * (GARDEN_TOP + (row + .5) * (GARDEN_BOTTOM - GARDEN_TOP) / GARDEN_ROWS),
+      hp, maxHp: hp, cooldown: random(0, .7), age: random(0, 10), blink: random(1, 4),
+      attackFace: 0, hurtFace: 0, growFlash: 0,
+      nectarTimer: random(3.5, 6.5) / ROLES[role].nectar
     });
   }
 
@@ -419,26 +482,36 @@
       friend.nectarTimer -= dt;
       if (friend.nectarTimer <= 0) {
         state.nectarDrops.push({ x: friend.x, y: friend.y - 48, baseY: friend.y - 48, age: 0, life: 12, color: friend.color });
-        friend.nectarTimer = 5.5 - friend.genome.speed * 2;
+        friend.nectarTimer = (5.5 - friend.genome.speed * 2) / (ROLES[friend.role] || ROLES.sprout).nectar;
         burst(friend.x, friend.y - 42, "#f4b942", 4);
       }
       friend.attackFace = Math.max(0, (friend.attackFace || 0) - dt);
+      friend.growFlash = Math.max(0, (friend.growFlash || 0) - dt);
       friend.hurtFace = Math.max(0, (friend.hurtFace || 0) - dt);
       friend.cooldown -= dt;
       friend.blink -= dt;
       if (friend.blink < -.12) friend.blink = random(1.4, 4.8);
-      const range = 280 + friend.genome.range * 220;
-      let target = null, targetDist = Infinity;
+      const role = ROLES[friend.role] || ROLES.sprout;
+      const range = (280 + friend.genome.range * 220) * role.range;
+      // A Lobber arcs over the front line to hit the radical that is furthest away;
+      // everyone else shoots whatever is closest.
+      let target = null, targetDist = role.lobs ? -Infinity : Infinity;
       for (const enemy of state.enemies) {
         const distance = Math.hypot(enemy.x - friend.x, enemy.y - friend.y);
-        if (distance < range && distance < targetDist) { target = enemy; targetDist = distance; }
+        if (distance >= range) continue;
+        if (role.lobs ? distance > targetDist : distance < targetDist) { target = enemy; targetDist = distance; }
       }
       if (target && friend.cooldown <= 0) {
         friend.attackFace = .3;
         const travel = 145 + friend.genome.speed * 190;
         const multiplier = damageMultiplier(friend.emoji, target.char);
-        state.projectiles.push({ x: friend.x, y: friend.y - 12, target, speed: travel, damage: (4 + friend.genome.power * 12) * multiplier, multiplier, color: friend.color });
-        friend.cooldown = 1.15 - friend.genome.speed * .72;
+        state.projectiles.push({
+          x: friend.x, y: friend.y - 12, target, speed: travel,
+          damage: (4 + friend.genome.power * 12) * multiplier * role.dmg * tierPower(friend.tier),
+          multiplier, color: role.accent || friend.color,
+          chills: !!role.chills, splash: role.lobs ? 78 : 0
+        });
+        friend.cooldown = (1.15 - friend.genome.speed * .72) / (role.rate * tierRate(friend.tier));
         tone(270 + friend.genome.power * 100, .025, "triangle", .018);
       }
     }
@@ -449,6 +522,15 @@
       const dx = shot.target.x - shot.x, dy = shot.target.y - shot.y, distance = Math.hypot(dx, dy);
       if (distance < Math.max(10, shot.speed * dt)) {
         shot.target.hp -= shot.damage; shot.target.hit = .12; burst(shot.x, shot.y, shot.color, 4); state.projectiles.splice(i, 1);
+        if (shot.chills) shot.target.chill = 2.6;
+        if (shot.splash) {
+          for (const other of state.enemies) {
+            if (other === shot.target) continue;
+            if (Math.hypot(other.x - shot.x, other.y - shot.y) > shot.splash) continue;
+            other.hp -= shot.damage * .5; other.hit = .12;
+            if (other.hp <= 0) defeatEnemy(other);
+          }
+        }
         if (shot.multiplier > 1) {
           shot.target.counterHit = .7;
           state.particles.push({ x: shot.x, y: shot.y - 20, vx: 0, vy: -25, life: .8, text: "2.5×!", color: "#b9431e" });
@@ -459,7 +541,8 @@
 
     for (let i = state.enemies.length - 1; i >= 0; i--) {
       const enemy = state.enemies[i];
-      enemy.phase += dt * 2; enemy.hit = Math.max(0, enemy.hit - dt); enemy.counterHit = Math.max(0, (enemy.counterHit || 0) - dt);
+      enemy.phase += dt * 2; enemy.hit = Math.max(0, enemy.hit - dt);
+      enemy.chill = Math.max(0, (enemy.chill || 0) - dt); enemy.counterHit = Math.max(0, (enemy.counterHit || 0) - dt);
       const defender = state.friends.find(friend => Math.hypot(friend.x - enemy.x, friend.y - enemy.y) < 42);
       if (defender) {
         defender.hurtFace = .4;
@@ -473,7 +556,9 @@
           updateUI(); renderOffers(); announce(`${defender.name} needs a nap. Recruit a new friend!`);
         }
       } else {
-        enemy.y += enemy.speed * dt; enemy.x = clamp(enemy.x + Math.sin(enemy.phase) * enemy.drift * 9 * dt, 24, width - 24);
+        const crawl = enemy.chill > 0 ? .42 : 1;
+        enemy.y += enemy.speed * dt * crawl;
+        enemy.x = clamp(enemy.x + Math.sin(enemy.phase) * enemy.drift * 9 * dt * crawl, 24, width - 24);
       }
       if (enemy.y > height * GARDEN_BOTTOM) {
         state.enemies.splice(i, 1); state.health--; burst(enemy.x, height - 25, "#ff6d4a", 9); tone(95, .14, "sawtooth", .035); updateUI();
@@ -552,6 +637,17 @@
     ctx.restore();
     ctx.fillStyle = "rgba(23,34,28,.2)"; ctx.fillRect(friend.x - 20, friend.y + 37, 40, 3);
     ctx.fillStyle = "#71b36a"; ctx.fillRect(friend.x - 20, friend.y + 37, 40 * clamp(friend.hp / friend.maxHp, 0, 1), 3);
+    // A ring in the role's colour, and one pip per growth tier under it, so the
+    // garden can be read at a glance without tapping anything.
+    const accent = ROLES[friend.role]?.accent || "#7cc96b";
+    ctx.strokeStyle = accent; ctx.lineWidth = friend.growFlash > 0 ? 3.5 : 1.8;
+    ctx.globalAlpha = friend.growFlash > 0 ? 1 : .75;
+    ctx.beginPath(); ctx.ellipse(friend.x, friend.y + 26, 21, 6.5, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 1;
+    for (let pip = 0; pip < friend.tier; pip++) {
+      ctx.fillStyle = accent;
+      ctx.beginPath(); ctx.arc(friend.x - 6 + pip * 6, friend.y + 45, 2.1, 0, Math.PI * 2); ctx.fill();
+    }
   }
 
   function drawNectar(drop) {
@@ -562,6 +658,35 @@
     ctx.fillStyle = "#fff7c2"; ctx.beginPath(); ctx.arc(-3, -3, 2, 0, Math.PI * 2); ctx.fill();
     ctx.font = '500 8px "DM Mono", monospace'; ctx.textAlign = "center"; ctx.fillStyle = "#17221c"; ctx.fillText("+1", 0, 22);
     ctx.restore(); ctx.globalAlpha = 1;
+  }
+
+  // Feed a planted friend a couple of sparks and it grows: tougher, harder hitting,
+  // faster. Every level is then a choice between a wider garden and a stronger one.
+  // Investing in a lineage is also the clearest statement of preference the game
+  // can read, so it counts towards that lineage's fitness.
+  function growFriend(friend) {
+    if (friend.tier >= MAX_TIER) { announce(`${friend.name} is fully grown`); return false; }
+    const cost = GROW_COSTS[friend.tier];
+    if (state.sparks < cost) { announce(`${cost} sparks to grow ${friend.name}`); return false; }
+    state.sparks -= cost;
+    friend.tier += 1;
+    friend.maxHp = baseHp(friend.genome, friend.tier);
+    friend.hp = friend.maxHp;      // growing mends it as well
+    friend.growFlash = .8;
+    burst(friend.x, friend.y - 10, ROLES[friend.role]?.accent || "#7cc96b", 14);
+    rewardGrowth(friend);
+    updateUI(); renderOffers();
+    tone(520, .07, "sine"); setTimeout(() => tone(700, .09, "sine"), 70);
+    announce(`${friend.name} grew to tier ${friend.tier}`);
+    return true;
+  }
+
+  function rewardGrowth(friend) {
+    const line = memory.lineages.find(item => item.id === friend.id);
+    if (!line) return;
+    line.fitness = clamp(line.fitness + GROW_FITNESS, FITNESS_FLOOR, FITNESS_CAP);
+    trimLineages();
+    saveMemory();
   }
 
   function collectNectar(event) {
@@ -592,7 +717,17 @@
       return;
     }
     const index = state.nectarDrops.findIndex(drop => Math.hypot(drop.x - x, drop.y - y) < 34);
-    if (index < 0) return;
+    if (index < 0) {
+      // No drop under the tap, so this is a request to grow whatever is there.
+      const reach = Math.max(26, width / 22);
+      let grown = null, best = Infinity;
+      for (const friend of state.friends) {
+        const distance = Math.hypot(friend.x - x, friend.y - y);
+        if (distance < reach && distance < best) { grown = friend; best = distance; }
+      }
+      if (grown) growFriend(grown);
+      return;
+    }
     state.nectarDrops.splice(index, 1); state.nectar++; state.sparks = Math.min(SPARK_CAP, state.sparks + 1);
     updateUI(); renderOffers(); tone(720, .07, "sine"); announce("Nectar collected — +1 spark");
   }
@@ -685,10 +820,12 @@
   function drawEnemy(enemy) {
     ctx.save(); ctx.translate(enemy.x, enemy.y); ctx.rotate(reducedMotion.matches ? 0 : Math.sin(enemy.phase) * .1);
     if (enemy.hit > 0) { ctx.shadowColor = "white"; ctx.shadowBlur = 16; }
+    else if (enemy.chill > 0) { ctx.shadowColor = "#6fb7e8"; ctx.shadowBlur = 14; }
     // Fredoka carries no CJK glyphs, so name the CJK families explicitly instead of
     // silently falling through to whatever `sans-serif` happens to resolve to.
     ctx.font = `700 ${enemy.size}px ${HAN_FONT}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillStyle = enemy.hit > 0 ? "#ff6d4a" : radicalColor(enemy.char); ctx.fillText(radicalGlyph(enemy.char), 0, 0); ctx.restore();
+    ctx.fillStyle = enemy.hit > 0 ? "#ff6d4a" : enemy.chill > 0 ? "#8fd0f5" : radicalColor(enemy.char);
+    ctx.fillText(radicalGlyph(enemy.char), 0, 0); ctx.restore();
     ctx.fillStyle = "rgba(23,34,28,.17)"; ctx.fillRect(enemy.x - 15, enemy.y - enemy.size * .7, 30, 2);
     ctx.fillStyle = "#ff6d4a"; ctx.fillRect(enemy.x - 15, enemy.y - enemy.size * .7, 30 * clamp(enemy.hp / enemy.maxHp, 0, 1), 2);
     ctx.font = '500 9px "DM Mono", monospace'; ctx.textAlign = "center"; ctx.textBaseline = "top";

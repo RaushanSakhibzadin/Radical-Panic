@@ -10,8 +10,8 @@
     <title>Radical Rascals</title>
     <!-- Fonts are served from this repository, not from Google. The game makes no
          third-party requests at all: nothing about a player reaches any other host. -->
-    <link rel="stylesheet" href="fonts.css?v=20260918-vertical-1" />
-    <link rel="stylesheet" href="styles.css?v=20260918-vertical-1" />
+    <link rel="stylesheet" href="fonts.css?v=20260919-roles-1" />
+    <link rel="stylesheet" href="styles.css?v=20260919-roles-1" />
   </head>
   <body>
     <div class="noise" aria-hidden="true"></div>
@@ -60,7 +60,7 @@
             </div>
             <span class="generation">GEN <b id="generation">01</b></span>
           </div>
-          <p class="hint">Recruit for 1 spark. Friends fight automatically and grow Nectar drops over time. Your picks shape future generations.</p>
+          <p class="hint">Recruit for 1 spark, then <b>tap a planted friend to grow it</b> — tier 2 costs 2 sparks, tier 3 costs 3. Your picks and what you invest in shape future generations.</p>
           <div class="choices" id="choices"></div>
           <button class="skip-button" id="reroll" type="button">Shuffle mutations <span>costs 1 spark</span></button>
           <button class="shovel-button" id="shovel" type="button" aria-pressed="false">🪏 Shovel a friend <span>remove one planted emoji</span></button>
@@ -70,6 +70,17 @@
             <span><i class="dot green"></i>HP</span>
             <span><i class="dot purple"></i>Defence</span>
           </div>
+          <details class="counter-guide">
+            <summary>Jobs · what each friend does</summary>
+            <p><b style="color:#7cc96b">Sprout</b> shoots the nearest radical, steadily.
+               <b style="color:#f4b942">Grower</b> makes Nectar three times as fast but barely fights.
+               <b style="color:#9a7b5a">Bulwark</b> has triple the health and holds the line.
+               <b style="color:#6fb7e8">Frost</b> chills radicals so they crawl.
+               <b style="color:#c77ad4">Lobber</b> arcs over the front rank at the furthest radical and splashes.</p>
+            <p>A friend's job is carried by a gene, so it is inherited and it mutates:
+               keep planting Lobbers and you will be offered more of them, and now and
+               then one of their children will come out as something else.</p>
+          </details>
           <details class="counter-guide">
             <summary>Meaning matters · 2.5× counters</summary>
             <p>Water quenches fire ⽕ and erodes mountains ⼭. Plants absorb water ⽔ and break through earth ⼟. Fire burns trees ⽊. Cold freezes water ⽔, cools fire ⽕, and frosts fields ⽥. Clouds shade the sun ⽇. Light outshines the moon ⽉.</p>
@@ -94,6 +105,6 @@
       <canvas id="victory-emoji" width="600" height="600" aria-hidden="true"></canvas>
       <p id="victory-caption"></p>
     </div>
-    <script src="game.js?v=20260918-vertical-1"></script>
+    <script src="game.js?v=20260919-roles-1"></script>
   </body>
 </html>
