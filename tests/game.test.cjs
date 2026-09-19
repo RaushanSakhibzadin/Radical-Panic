@@ -175,17 +175,44 @@ test('new friends choose available planting slots in a random order', () => {
   assert.notDeepEqual(slots.slice(0, 4), [0, 1, 2, 3]);
 });
 
-test('planted friends generate clickable Nectar that returns one Spark', () => {
-  const { game, elements } = boot(); game.selectOffer(game.state.offers[0]);
+test('Nectar banks itself in the top-right corner without being chased', () => {
+  const { game } = boot(); game.selectOffer(game.state.offers[0]);
   const friend = game.state.friends[0]; friend.nectarTimer = .01;
   game.update(.02);
   assert.equal(game.state.nectarDrops.length, 1);
   assert.equal(game.state.nectar, 0);
   const drop = game.state.nectarDrops[0];
-  elements.get('#arena').events.pointerdown({ clientX: drop.x, clientY: drop.y });
-  assert.equal(game.state.nectarDrops.length, 0);
+  const startX = drop.x, startY = drop.y;
+
+  // It hovers over the friend first, so you can see where it came from.
+  game.update(.2);
+  assert.equal(game.state.nectarDrops.length, 1, 'it should linger briefly before leaving');
+  assert.ok(Math.abs(drop.x - startX) < 1, 'and not set off sideways yet');
+
+  // Then it heads for the corner on its own.
+  game.update(.4);
+  assert.ok(drop.x > startX, 'it must travel right');
+  assert.ok(drop.y < startY, 'and upward');
+
+  // And banks itself, with no tap anywhere.
+  const sparks = game.state.sparks;
+  for (let i = 0; i < 300 && game.state.nectarDrops.length; i++) game.update(1 / 60);
+  assert.equal(game.state.nectarDrops.length, 0, 'it must collect itself');
   assert.equal(game.state.nectar, 1);
-  assert.equal(game.state.sparks, 3);
+  assert.equal(game.state.sparks, sparks + 1);
+});
+
+test('a tap on the field can only ever mean "grow this friend"', () => {
+  const { game, elements } = boot();
+  game.state.sparks = 8;
+  game.selectOffer(game.state.offers[0]);
+  const friend = game.state.friends[0];
+  // A drop drifting over the friend must not steal the tap any more.
+  game.state.nectarDrops.push({ x: friend.x, y: friend.y, baseY: friend.y, age: 0, speed: 0, color: '#fff' });
+  const nectar = game.state.nectar;
+  elements.get('#arena').events.pointerdown({ clientX: friend.x, clientY: friend.y });
+  assert.equal(friend.tier, 2, 'the tap must grow the friend');
+  assert.equal(game.state.nectar, nectar, 'and must not pocket the drop instead');
 });
 
 test('radicals use meaning colours and remain visible across every radical type', () => {
@@ -584,12 +611,18 @@ test('an armed shovel never traps the player when the last friend dies', () => {
   assert.equal(game.state.shovelMode, false, 'the shovel must not stay armed over an empty garden');
   assert.equal(elements.get('#shovel').disabled, true, 'and the button must not look clickable');
 
-  // Nectar taps used to be swallowed by the shovel branch for the rest of the run.
-  game.state.nectarDrops.push({ x: 300, y: 300, baseY: 300, age: 0, life: 12, color: '#fff' });
+  // Nectar banks itself regardless of what the shovel is doing, and the tap is
+  // free again for its real job rather than being swallowed for the rest of the run.
+  game.state.nectarDrops.push({ x: 300, y: 300, baseY: 300, age: 0, speed: 0, color: '#fff' });
   const sparks = game.state.sparks;
-  elements.get('#arena').events.pointerdown({ clientX: 300, clientY: 300 });
-  assert.equal(game.state.nectarDrops.length, 0, 'Nectar must still be collectable');
+  for (let i = 0; i < 300 && game.state.nectarDrops.length; i++) game.update(1 / 60);
+  assert.equal(game.state.nectarDrops.length, 0, 'Nectar must still be banked');
   assert.equal(game.state.sparks, sparks + 1);
+  game.state.sparks = 8;
+  game.selectOffer(game.state.offers[0]);
+  const replanted = game.state.friends[0];
+  elements.get('#arena').events.pointerdown({ clientX: replanted.x, clientY: replanted.y });
+  assert.equal(replanted.tier, 2, 'taps work normally again');
 });
 
 test('the shovel can always be put away, even with nothing left to dig', () => {
