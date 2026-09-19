@@ -33,6 +33,8 @@ node --test tests/game.test.cjs
 - Meaning-based counters deal **2.5× damage**: water quenches fire, fire burns trees, plants absorb water, cold freezes water, and more. Each candidate shows its strong matchups; open **Meaning matters** for the complete rules. Neutral matchups deal normal damage.
 - The garden has one horizontal row with sixteen friend slots on every screen size.
 - New friends choose a random free slot, so planting grows the garden organically instead of filling from left to right.
+- **Every friend has a job**, carried by a gene so it is inherited and can drift: **Sprout** shoots the nearest radical, **Grower** makes Nectar three times as fast but barely fights, **Bulwark** has triple the health and holds the line, **Frost** chills radicals so they crawl, and **Lobber** arcs over the front rank at the furthest radical and splashes. Keep planting one job and you will be offered more of it.
+- **Tap a planted friend to grow it.** Tier 2 costs 2 sparks, tier 3 costs 3; growing makes it tougher and harder hitting, and mends it. Since sparks also buy new recruits, every level is a choice between a wider garden and a stronger one — and spending sparks on a lineage counts as a vote for it.
 - Each planted friend generates a floating Nectar drop every few seconds. Click a drop to collect it; each Nectar gives one Spark so the garden can keep growing.
 - Radical colours follow their meaning: water is blue, fire orange, trees green, mountains purple, earth brown, sun gold, and moon indigo.
 - The campaign has 300 levels. Every enemy is one of the 214 official Kangxi Radicals; radicals without a named counter use neutral damage and receive a numbered readable label.

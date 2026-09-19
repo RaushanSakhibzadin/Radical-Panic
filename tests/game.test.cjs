@@ -29,7 +29,7 @@ function boot(saved, blocked = false) {
     localStorage: { getItem() { if (blocked) throw Error('Storage blocked'); return stored ?? null; }, setItem(_, value) { if (blocked) throw Error('Storage blocked'); stored = value; } },
     setTimeout() {}, clearTimeout() {}, requestAnimationFrame() {} });
   const source = fs.readFileSync(require.resolve('../game.js'), 'utf8').replace('start(); requestAnimationFrame(frame);',
-    'start(); globalThis.game = { get state() { return state; }, get memory() { return memory; }, selectOffer, randomGenome, chooseParent, rememberChoices, update, resize, draw, start, renderOffers, emotionFor, drawEmojiFace, EMOJI, RADICALS, RADICAL_COLORS, MAX_LEVEL, affinity, damageMultiplier, radicalLabel, radicalGlyph, radicalColor, decayLineages, drawOfferPreviews, previewEmotion };');
+    'start(); globalThis.game = { get state() { return state; }, get memory() { return memory; }, selectOffer, randomGenome, chooseParent, rememberChoices, update, resize, draw, start, renderOffers, emotionFor, drawEmojiFace, EMOJI, RADICALS, RADICAL_COLORS, MAX_LEVEL, affinity, damageMultiplier, radicalLabel, radicalGlyph, radicalColor, decayLineages, drawOfferPreviews, previewEmotion, roleOf, ROLES, growFriend, GROW_COSTS, MAX_TIER };');
   vm.runInContext(source, context);
   return { game: context.game, elements, context, drawnText, textStyles, stored: () => stored };
 }
@@ -226,7 +226,9 @@ test('planted emoji use opaque ink even after fading particles were drawn', () =
 test('friends shoot past the old maximum range while inherited range still limits targeting', () => {
   function firesAt(distance, rangeGene) {
     const { game } = boot(); game.selectOffer(game.state.offers[0]);
-    const friend = game.state.friends[0]; friend.genome.range = rangeGene; friend.cooldown = 0;
+    const friend = game.state.friends[0];
+    // Range is multiplied by the role, so pin the plain shooter to test the gene.
+    friend.role = 'sprout'; friend.genome.range = rangeGene; friend.cooldown = 0;
     game.state.enemies.push({ char: '⽕', x: friend.x, y: friend.y - distance, hp: 1000, maxHp: 1000, phase: 0, hit: 0, speed: 0, drift: 0 });
     game.update(.01);
     return game.state.projectiles.length > 0;
@@ -246,7 +248,9 @@ test('semantic counters apply to real projectiles: water rapidly defeats fire, n
   assert.equal(game.damageMultiplier('🍋', '⽕'), 1);
   assert.equal(game.damageMultiplier('💧', '⼈'), 1);
   const offer = game.state.offers[0]; offer.emoji = '💧'; offer.genome.power = .5;
-  game.selectOffer(offer); const friend = game.state.friends[0]; friend.cooldown = 0;
+  game.selectOffer(offer); const friend = game.state.friends[0];
+  friend.role = 'sprout';   // damage is multiplied by the role; test the counter, not the job
+  friend.cooldown = 0;
   const fire = { char: '⽕', x: friend.x, y: friend.y - 20, hp: 25, maxHp: 25, phase: 0, hit: 0, speed: 0, drift: 0 };
   game.state.enemies.push(fire); game.update(.01);
   assert.equal(game.state.enemies.includes(fire), false);
@@ -599,4 +603,114 @@ test('the shovel can always be put away, even with nothing left to dig', () => {
   // ...but it cannot be armed again with no garden to dig in.
   elements.get('#shovel').events.click();
   assert.equal(game.state.shovelMode, false);
+});
+
+test('a friend\'s job comes from a gene, so it is inherited and can mutate', () => {
+  const { game } = boot();
+  // Every job must be reachable from a fresh founder, not just in theory.
+  const seen = new Set();
+  for (let i = 0; i < 4000; i++) seen.add(game.roleOf(game.randomGenome()));
+  assert.deepEqual([...seen].sort(), ['bulwark', 'frost', 'grower', 'lobber', 'sprout']);
+
+  // A child keeps its parent's job: the role gene steps by at most .07 a
+  // generation, which cannot cross a band from the middle of one. That is
+  // deliberate - a job should be a stable trait, not a coin flip at every birth.
+  const parent = { ...game.randomGenome(), role: .40 };   // mid-band grower
+  assert.equal(game.roleOf(parent), 'grower');
+  let same = 0;
+  for (let i = 0; i < 400; i++) if (game.roleOf(game.randomGenome(parent)) === 'grower') same += 1;
+  assert.equal(same, 400, 'a job must be stable across a single generation');
+
+  // Over a lineage, though, it drifts - that is what makes the job selectable
+  // rather than fixed at founding.
+  let genome = { ...game.randomGenome(), role: .40 };
+  const rolesSeen = new Set();
+  for (let generation = 0; generation < 400; generation++) {
+    genome = game.randomGenome(genome);
+    rolesSeen.add(game.roleOf(genome));
+  }
+  assert.ok(rolesSeen.size > 1, `a job must be able to drift over generations, saw ${[...rolesSeen]}`);
+});
+
+test('each job actually behaves differently, not just scores differently', () => {
+  function plant(role) {
+    const { game } = boot();
+    game.selectOffer(game.state.offers[0]);
+    const friend = game.state.friends[0];
+    friend.role = role;
+    friend.maxHp = friend.hp = (35 + friend.genome.life * 80) * game.ROLES[role].hp;
+    return { game, friend };
+  }
+
+  // Bulwark soaks: far more health from the same genome than a Sprout.
+  const wall = plant('bulwark'), shot = plant('sprout');
+  wall.friend.genome.life = shot.friend.genome.life;
+  const hpOf = f => (35 + f.genome.life * 80);
+  assert.ok(game_hp('bulwark', hpOf(wall.friend)) > game_hp('sprout', hpOf(shot.friend)) * 2);
+  function game_hp(role, base) { return base * wall.game.ROLES[role].hp; }
+
+  // Grower makes Nectar far faster than it fights.
+  const grow = plant('grower');
+  grow.friend.nectarTimer = .01;
+  grow.game.update(.02);
+  assert.equal(grow.game.state.nectarDrops.length, 1);
+  assert.ok(grow.friend.nectarTimer < (5.5 - grow.friend.genome.speed * 2),
+    'a Grower must refill its Nectar sooner than a plain friend');
+
+  // Frost chills what it hits, so radicals crawl.
+  const cold = plant('frost');
+  cold.friend.cooldown = 0;
+  const target = { char: '\u2F55', x: cold.friend.x, y: cold.friend.y - 60, hp: 9999, maxHp: 9999,
+    phase: 0, hit: 0, speed: 60, drift: 0, size: 40 };
+  cold.game.state.enemies.push(target);
+  for (let i = 0; i < 90; i++) cold.game.update(1 / 60);
+  assert.ok(target.chill > 0, 'a Frost shot must chill its target');
+
+  // Lobber reaches over the front rank for the furthest radical in range.
+  const lob = plant('lobber');
+  lob.friend.cooldown = 0; lob.friend.genome.range = .95;
+  const near = { char: '\u2F55', x: lob.friend.x, y: lob.friend.y - 60, hp: 9999, maxHp: 9999, phase: 0, hit: 0, speed: 0, drift: 0, size: 40 };
+  const far = { char: '\u2F55', x: lob.friend.x, y: lob.friend.y - 260, hp: 9999, maxHp: 9999, phase: 0, hit: 0, speed: 0, drift: 0, size: 40 };
+  lob.game.state.enemies.push(near, far);
+  lob.game.update(.01);
+  assert.equal(lob.game.state.projectiles.length, 1);
+  assert.equal(lob.game.state.projectiles[0].target, far, 'a Lobber must aim past the front rank');
+  assert.ok(lob.game.state.projectiles[0].splash > 0, 'and it must splash');
+});
+
+test('growing a friend costs sparks, makes it stronger, and tops out', () => {
+  const { game } = boot();
+  game.state.sparks = 12;
+  game.selectOffer(game.state.offers[0]);
+  const friend = game.state.friends[0];
+  assert.equal(friend.tier, 1);
+
+  const hp1 = friend.maxHp, sparks1 = game.state.sparks;
+  friend.hp = 1;                                    // growing should mend it too
+  assert.equal(game.growFriend(friend), true);
+  assert.equal(friend.tier, 2);
+  assert.equal(game.state.sparks, sparks1 - game.GROW_COSTS[1]);
+  assert.ok(friend.maxHp > hp1, 'a grown friend must be tougher');
+  assert.equal(friend.hp, friend.maxHp, 'and growing mends it');
+
+  assert.equal(game.growFriend(friend), true);
+  assert.equal(friend.tier, game.MAX_TIER);
+  assert.equal(game.growFriend(friend), false, 'tier 3 is the ceiling');
+  assert.equal(friend.tier, game.MAX_TIER);
+});
+
+test('growing is refused without the sparks, and counts as a vote for that lineage', () => {
+  const { game } = boot();
+  game.selectOffer(game.state.offers[0]);
+  const friend = game.state.friends[0];
+  const before = game.memory.lineages.find(item => item.id === friend.id).fitness;
+
+  game.state.sparks = 0;
+  assert.equal(game.growFriend(friend), false, 'no sparks, no growth');
+  assert.equal(friend.tier, 1);
+
+  game.state.sparks = 5;
+  assert.equal(game.growFriend(friend), true);
+  const after = game.memory.lineages.find(item => item.id === friend.id).fitness;
+  assert.ok(after > before, 'investing sparks in a lineage should raise its fitness');
 });
