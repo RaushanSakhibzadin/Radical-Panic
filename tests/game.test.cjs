@@ -535,3 +535,68 @@ test('the tray is locked while the victory character is on screen', () => {
   assert.equal(game.state.friends.length, 1);
   assert.equal(game.state.started, true);
 });
+test('the shovel digs up the friend nearest the tap, not the first one in the list', () => {
+  const { game, elements } = boot();
+  game.state.sparks = 30;
+  for (let i = 0; i < 12; i++) game.selectOffer(game.state.offers[0]);
+  const planted = game.state.friends.slice();
+  const reach = Math.max(24, 791 / 24);
+
+  // Find a tap where two friends are both in reach but the nearer one is NOT the
+  // one that comes first in state.friends - the case the old findIndex got wrong.
+  let scenario = null;
+  for (let i = 0; i < planted.length && !scenario; i++) {
+    for (let j = i + 1; j < planted.length; j++) {
+      const gap = Math.abs(planted[i].x - planted[j].x);
+      if (gap >= reach * 2 || gap === 0) continue;
+      // Tap just off the midpoint, towards the one later in the array.
+      const x = (planted[i].x + planted[j].x) / 2 + Math.sign(planted[j].x - planted[i].x) * 2;
+      const near = Math.abs(planted[i].x - x) < Math.abs(planted[j].x - x) ? planted[i] : planted[j];
+      if (near === planted[j]) { scenario = { x, y: planted[j].y, near }; break; }
+    }
+  }
+  assert.ok(scenario, 'expected an overlapping pair to test');
+
+  elements.get('#shovel').events.click();
+  elements.get('#arena').events.pointerdown({ clientX: scenario.x, clientY: scenario.y });
+  const dug = planted.find(friend => !game.state.friends.includes(friend));
+  assert.equal(dug, scenario.near, 'the nearest friend must be the one dug up');
+});
+
+test('an armed shovel never traps the player when the last friend dies', () => {
+  const { game, elements } = boot();
+  game.selectOffer(game.state.offers[0]);
+  const friend = game.state.friends[0];
+  elements.get('#shovel').events.click();
+  assert.equal(game.state.shovelMode, true);
+
+  // The last friend is eaten while the shovel is still out.
+  game.state.enemies.push({ char: '\u2F55', x: friend.x, y: friend.y, hp: 9999, maxHp: 9999,
+    phase: 0, hit: 0, speed: 20, drift: 0, size: 40 });
+  friend.hp = .001;
+  game.update(.1);
+
+  assert.equal(game.state.friends.length, 0);
+  assert.equal(game.state.shovelMode, false, 'the shovel must not stay armed over an empty garden');
+  assert.equal(elements.get('#shovel').disabled, true, 'and the button must not look clickable');
+
+  // Nectar taps used to be swallowed by the shovel branch for the rest of the run.
+  game.state.nectarDrops.push({ x: 300, y: 300, baseY: 300, age: 0, life: 12, color: '#fff' });
+  const sparks = game.state.sparks;
+  elements.get('#arena').events.pointerdown({ clientX: 300, clientY: 300 });
+  assert.equal(game.state.nectarDrops.length, 0, 'Nectar must still be collectable');
+  assert.equal(game.state.sparks, sparks + 1);
+});
+
+test('the shovel can always be put away, even with nothing left to dig', () => {
+  const { game, elements } = boot();
+  game.selectOffer(game.state.offers[0]);
+  elements.get('#shovel').events.click();
+  assert.equal(game.state.shovelMode, true);
+  game.state.friends.length = 0;          // the garden empties by any route
+  elements.get('#shovel').events.click();
+  assert.equal(game.state.shovelMode, false, 'putting the shovel away must never be blocked');
+  // ...but it cannot be armed again with no garden to dig in.
+  elements.get('#shovel').events.click();
+  assert.equal(game.state.shovelMode, false);
+});
