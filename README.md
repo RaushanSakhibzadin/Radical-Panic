@@ -1,5 +1,7 @@
 # Radical Rascals
 
+[![Tests](https://github.com/RaushanSakhibzadin/Radical-Panic/actions/workflows/ci.yml/badge.svg)](https://github.com/RaushanSakhibzadin/Radical-Panic/actions/workflows/ci.yml)
+
 A tiny, open-source evolutionary defence game. Mischievous Chinese radicals drift toward your garden; you defend it by choosing ordinary eyeless emoji and giving each one a pair of expressive, animated eyes.
 
 Every choice matters. A selected mutation becomes more likely to parent future choices, while skipped lineages become less likely. The resulting evolutionary memory is stored only in the player's browser.
@@ -18,7 +20,8 @@ python3 -m http.server 8080
 
 Then visit <http://localhost:8080>.
 
-Run the gameplay checks with Node.js 18 or newer:
+Run the gameplay checks with Node.js 20 or newer (CI runs them on 20 and 22 for
+every push and pull request):
 
 ```sh
 node --test tests/game.test.cjs

@@ -1,0 +1,40 @@
+# Runs the gameplay tests on every push and pull request.
+#
+# GitHub Pages publishes this repository straight from the root of `main`, so a
+# merge is a deploy. Without this, a regression would go live silently.
+#
+# There is no build step and no dependencies - the game is plain ES modules and a
+# canvas, and tests/game.test.cjs drives the real game.js in a vm sandbox with a
+# fake DOM and a seeded RNG. So CI is just: check out, pick a Node, run the tests.
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # A newer push to the same branch makes an in-flight run redundant.
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 20 is the oldest Node with a stable `node --test`; 22 is current. The
+        # tests are pure JS with no dependencies, so both should always pass.
+        node: ['20', '22']
+    name: node ${{ matrix.node }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: node --test tests/game.test.cjs
