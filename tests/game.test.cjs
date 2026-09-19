@@ -29,7 +29,7 @@ function boot(saved, blocked = false) {
     localStorage: { getItem() { if (blocked) throw Error('Storage blocked'); return stored ?? null; }, setItem(_, value) { if (blocked) throw Error('Storage blocked'); stored = value; } },
     setTimeout() {}, clearTimeout() {}, requestAnimationFrame() {} });
   const source = fs.readFileSync(require.resolve('../game.js'), 'utf8').replace('start(); requestAnimationFrame(frame);',
-    'start(); globalThis.game = { get state() { return state; }, get memory() { return memory; }, selectOffer, randomGenome, chooseParent, rememberChoices, update, resize, draw, start, renderOffers, emotionFor, drawEmojiFace, EMOJI, RADICALS, RADICAL_COLORS, MAX_LEVEL, affinity, damageMultiplier, radicalLabel, radicalGlyph, radicalColor, decayLineages, drawOfferPreviews, previewEmotion, roleOf, ROLES, growFriend, GROW_COSTS, MAX_TIER };');
+    'start(); globalThis.game = { get state() { return state; }, get memory() { return memory; }, selectOffer, randomGenome, chooseParent, rememberChoices, update, resize, draw, start, renderOffers, emotionFor, drawEmojiFace, EMOJI, RADICALS, RADICAL_COLORS, MAX_LEVEL, affinity, damageMultiplier, radicalLabel, radicalGlyph, radicalColor, decayLineages, drawOfferPreviews, previewEmotion, roleOf, ROLES, growFriend, GROW_COSTS, MAX_TIER, HIT_FLASH };');
   vm.runInContext(source, context);
   return { game: context.game, elements, context, drawnText, textStyles, stored: () => stored };
 }
@@ -713,4 +713,44 @@ test('growing is refused without the sparks, and counts as a vote for that linea
   assert.equal(game.growFriend(friend), true);
   const after = game.memory.lineages.find(item => item.id === friend.id).fitness;
   assert.ok(after > before, 'investing sparks in a lineage should raise its fitness');
+});
+
+test('a radical keeps its own colour when hit or chilled - it only blinks', () => {
+  const char = '\u2F55';                       // fire
+  const own = (() => { const { game } = boot(); return game.radicalColor(char); })();
+
+  function paint(mutate) {
+    const { game, textStyles } = boot();
+    const enemy = { char, x: 120, y: 120, size: 40, hp: 10, maxHp: 10, phase: 0, hit: 0, chill: 0 };
+    mutate(enemy, game);
+    game.state.enemies.push(enemy);
+    textStyles.length = 0;
+    game.draw();
+    return textStyles.filter(item => item.text === game.radicalGlyph(char));
+  }
+
+  // Untouched: one draw, in its own colour.
+  const calm = paint(() => {});
+  assert.equal(calm.length, 1);
+  assert.equal(calm[0].fillStyle, own);
+  assert.equal(calm[0].alpha, 1);
+
+  // Chilled for the full 2.6s: still its own colour, opaque. It used to be repainted
+  // icy blue for the whole duration.
+  const cold = paint(enemy => { enemy.chill = 2.6; });
+  assert.equal(cold.length, 1);
+  assert.equal(cold[0].fillStyle, own, 'a chilled radical must keep its colour');
+  assert.equal(cold[0].alpha, 1);
+
+  // Hit: the real colour is laid down first, with a translucent white blink over it.
+  const hit = paint((enemy, game) => { enemy.hit = game.HIT_FLASH; });
+  assert.equal(hit.length, 2, 'the blink is drawn on top, not instead');
+  assert.equal(hit[0].fillStyle, own, 'the real colour is still painted');
+  assert.equal(hit[0].alpha, 1);
+  assert.equal(hit[1].fillStyle, '#ffffff');
+  assert.ok(hit[1].alpha > 0 && hit[1].alpha < 1, 'the blink is translucent');
+
+  // ...and it fades, so the real colour comes back rather than hanging around.
+  const fading = paint((enemy, game) => { enemy.hit = game.HIT_FLASH * .25; });
+  assert.ok(fading[1].alpha < hit[1].alpha, 'the blink must fade out');
 });

@@ -105,6 +105,7 @@
   const PICK_FITNESS = 1.6;         // fitness a freshly planted lineage enters with
   const FITNESS_CAP = 8, FITNESS_FLOOR = .15;
   const FITNESS_DECAY = .97;        // applied to every lineage per cleared wave
+  const HIT_FLASH = .12;            // how long a damage blink lasts, in seconds
   const GROW_FITNESS = .5;          // spending sparks on a lineage is a loud preference
   const NOVELTY_CHANCE = .23;       // chance of drafting an entirely new lineage
   const MAX_LEVEL = 300;
@@ -521,13 +522,13 @@
       if (!state.enemies.includes(shot.target)) { state.projectiles.splice(i, 1); continue; }
       const dx = shot.target.x - shot.x, dy = shot.target.y - shot.y, distance = Math.hypot(dx, dy);
       if (distance < Math.max(10, shot.speed * dt)) {
-        shot.target.hp -= shot.damage; shot.target.hit = .12; burst(shot.x, shot.y, shot.color, 4); state.projectiles.splice(i, 1);
+        shot.target.hp -= shot.damage; shot.target.hit = HIT_FLASH; burst(shot.x, shot.y, shot.color, 4); state.projectiles.splice(i, 1);
         if (shot.chills) shot.target.chill = 2.6;
         if (shot.splash) {
           for (const other of state.enemies) {
             if (other === shot.target) continue;
             if (Math.hypot(other.x - shot.x, other.y - shot.y) > shot.splash) continue;
-            other.hp -= shot.damage * .5; other.hit = .12;
+            other.hp -= shot.damage * .5; other.hit = HIT_FLASH;
             if (other.hp <= 0) defeatEnemy(other);
           }
         }
@@ -819,13 +820,28 @@
 
   function drawEnemy(enemy) {
     ctx.save(); ctx.translate(enemy.x, enemy.y); ctx.rotate(reducedMotion.matches ? 0 : Math.sin(enemy.phase) * .1);
-    if (enemy.hit > 0) { ctx.shadowColor = "white"; ctx.shadowBlur = 16; }
+    // Fade the blink out over its lifetime so it reads as a flash rather than a
+    // change of costume.
+    const flash = clamp(enemy.hit / HIT_FLASH, 0, 1);
+    if (flash > 0) { ctx.shadowColor = "white"; ctx.shadowBlur = 16 * flash; }
     else if (enemy.chill > 0) { ctx.shadowColor = "#6fb7e8"; ctx.shadowBlur = 14; }
     // Fredoka carries no CJK glyphs, so name the CJK families explicitly instead of
     // silently falling through to whatever `sans-serif` happens to resolve to.
     ctx.font = `700 ${enemy.size}px ${HAN_FONT}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillStyle = enemy.hit > 0 ? "#ff6d4a" : enemy.chill > 0 ? "#8fd0f5" : radicalColor(enemy.char);
-    ctx.fillText(radicalGlyph(enemy.char), 0, 0); ctx.restore();
+    // A radical is ALWAYS drawn in its own meaning colour. Being hit or chilled used
+    // to replace that colour outright - orange for a moment, icy blue for the whole
+    // 2.6s of a chill - so you could not tell what was coming at you. Both states are
+    // shown on top of the real colour now, never instead of it.
+    ctx.fillStyle = radicalColor(enemy.char);
+    ctx.fillText(radicalGlyph(enemy.char), 0, 0);
+    if (flash > 0) {
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = flash * .8;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(radicalGlyph(enemy.char), 0, 0);
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
     ctx.fillStyle = "rgba(23,34,28,.17)"; ctx.fillRect(enemy.x - 15, enemy.y - enemy.size * .7, 30, 2);
     ctx.fillStyle = "#ff6d4a"; ctx.fillRect(enemy.x - 15, enemy.y - enemy.size * .7, 30 * clamp(enemy.hp / enemy.maxHp, 0, 1), 2);
     ctx.font = '500 9px "DM Mono", monospace'; ctx.textAlign = "center"; ctx.textBaseline = "top";
