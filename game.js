@@ -466,7 +466,11 @@
         defender.hp -= (10 + state.wave * 2) * (1 - defender.genome.defence * .65) * dt;
         if (defender.hp <= 0) {
           state.friends.splice(state.friends.indexOf(defender), 1);
-          burst(defender.x, defender.y, defender.color, 12); renderOffers(); announce(`${defender.name} needs a nap. Recruit a new friend!`);
+          // Without updateUI() the shovel button kept its old enabled look after the
+          // last friend died, so it invited a click that its own guard then ignored.
+          if (!state.friends.length) state.shovelMode = false;
+          burst(defender.x, defender.y, defender.color, 12);
+          updateUI(); renderOffers(); announce(`${defender.name} needs a nap. Recruit a new friend!`);
         }
       } else {
         enemy.y += enemy.speed * dt; enemy.x = clamp(enemy.x + Math.sin(enemy.phase) * enemy.drift * 9 * dt, 24, width - 24);
@@ -565,12 +569,25 @@
     const rect = canvas.getBoundingClientRect();
     const scaleX = width / rect.width, scaleY = height / rect.height;
     const x = (event.clientX - (rect.left || 0)) * scaleX, y = (event.clientY - (rect.top || 0)) * scaleY;
+    // An armed shovel over an empty garden has nothing to do, so let the tap fall
+    // through to Nectar rather than vanishing.
+    if (state.shovelMode && !state.friends.length) state.shovelMode = false;
     if (state.shovelMode) {
-      const index = state.friends.findIndex(friend => Math.hypot(friend.x - x, friend.y - y) < Math.max(24, width / 24));
-      if (index >= 0) {
-        const [removed] = state.friends.splice(index, 1);
-        burst(removed.x, removed.y, "#d18b55", 12); state.shovelMode = false;
-        updateUI(); renderOffers(); tone(180, .08, "triangle"); announce(`${removed.name} was dug up`);
+      // Pick the friend NEAREST the tap, not the first one in the array that happens
+      // to be in range. Sixteen slots are close enough together that their hit areas
+      // overlap, and since slots are assigned randomly the array order has nothing to
+      // do with where things are on screen - so the old findIndex dug up an
+      // effectively arbitrary one of the two you were pointing between.
+      const reach = Math.max(24, width / 24);
+      let target = null, best = Infinity;
+      for (const friend of state.friends) {
+        const distance = Math.hypot(friend.x - x, friend.y - y);
+        if (distance < reach && distance < best) { target = friend; best = distance; }
+      }
+      if (target) {
+        state.friends.splice(state.friends.indexOf(target), 1);
+        burst(target.x, target.y, "#d18b55", 12); state.shovelMode = false;
+        updateUI(); renderOffers(); tone(180, .08, "triangle"); announce(`${target.name} was dug up`);
       }
       return;
     }
@@ -714,7 +731,7 @@
     ui.wave.textContent = state.wave; ui.health.textContent = state.health; ui.sparks.textContent = state.sparks; ui.nectar.textContent = state.nectar;
     ui.best.textContent = memory.bestWave || 0; ui.generation.textContent = String(state.generation).padStart(2, "0");
     ui.reroll.disabled = trayLocked() || state.sparks < 1 || (!state.started && state.sparks === 1);
-    ui.shovel.disabled = state.over || state.friends.length === 0;
+    ui.shovel.disabled = state.over || (state.friends.length === 0 && !state.shovelMode);
     ui.shovel.setAttribute("aria-pressed", String(state.shovelMode));
     ui.pause.disabled = state.over || !state.started;
     ui.pause.textContent = state.paused ? "Resume" : "Pause";
@@ -753,7 +770,17 @@
   }
 
   ui.reroll.addEventListener("click", () => { if (trayLocked() || state.sparks < 1 || (!state.started && state.sparks === 1)) return; state.sparks--; rememberChoices(null); refillOffers(); updateUI(); tone(350, .05); });
-  ui.shovel.addEventListener("click", () => { if (state.over || state.friends.length === 0) return; state.shovelMode = !state.shovelMode; updateUI(); announce(state.shovelMode ? "Pick a friend to dig up" : "Shovel put away"); });
+  // Arming needs a garden to dig in; putting the shovel away never does. The old
+  // guard blocked both, so if your last friend died while the shovel was out you
+  // were stuck: every canvas tap was swallowed by the shovel branch, Nectar could
+  // not be collected, and the button that would have released you did nothing.
+  ui.shovel.addEventListener("click", () => {
+    if (state.over) return;
+    if (!state.shovelMode && state.friends.length === 0) return;
+    state.shovelMode = !state.shovelMode;
+    updateUI();
+    announce(state.shovelMode ? "Pick a friend to dig up" : "Shovel put away");
+  });
   ui.pause.addEventListener("click", () => { if (state.over || !state.started) return; state.paused = !state.paused; updateUI(); announce(state.paused ? "Garden paused" : "Here come the radicals!"); });
   ui.forget.addEventListener("click", () => { memory = { lineages: [], generation: 1, bestWave: 0 }; saveMemory(); start(); announce("Evolutionary memory cleared"); });
   ui.sound.addEventListener("click", () => { muted = !muted; ui.sound.classList.toggle("muted", muted); ui.sound.setAttribute("aria-label", muted ? "Turn sound on" : "Turn sound off"); if (!muted) tone(520, .06); });
