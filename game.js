@@ -107,7 +107,7 @@
   const FITNESS_DECAY = .97;        // applied to every lineage per cleared wave
   const NECTAR_POP = .45;           // it hovers this long so you see where it came from
   const NECTAR_SPEED = 210, NECTAR_ACCEL = 900;
-  const nectarTarget = () => ({ x: width - 30, y: 26 });   // the top-right corner
+  const nectarTarget = () => ({ x: width / 2, y: height - 16 });   // bottom centre of the field
   const HIT_FLASH = .12;            // how long a damage blink lasts, in seconds
   const GROW_FITNESS = .5;          // spending sparks on a lineage is a loud preference
   const NOVELTY_CHANCE = .23;       // chance of drafting an entirely new lineage
@@ -570,8 +570,8 @@
       }
     }
     // Nectar collects itself. It bobs briefly over the friend that grew it, so you
-    // can see where it came from, then flies to the counter in the top-right corner
-    // and banks itself. Chasing drops around the field was busywork that competed
+    // can see where it came from, then sinks to the bottom centre of the field and
+    // banks itself. Chasing drops around the field was busywork that competed
     // with the taps that actually matter - growing a friend and digging one up.
     for (let i = state.nectarDrops.length - 1; i >= 0; i--) {
       const drop = state.nectarDrops[i];
