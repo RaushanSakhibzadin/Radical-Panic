@@ -105,6 +105,9 @@
   const PICK_FITNESS = 1.6;         // fitness a freshly planted lineage enters with
   const FITNESS_CAP = 8, FITNESS_FLOOR = .15;
   const FITNESS_DECAY = .97;        // applied to every lineage per cleared wave
+  const NECTAR_POP = .45;           // it hovers this long so you see where it came from
+  const NECTAR_SPEED = 210, NECTAR_ACCEL = 900;
+  const nectarTarget = () => ({ x: width - 30, y: 26 });   // the top-right corner
   const HIT_FLASH = .12;            // how long a damage blink lasts, in seconds
   const GROW_FITNESS = .5;          // spending sparks on a lineage is a loud preference
   const NOVELTY_CHANCE = .23;       // chance of drafting an entirely new lineage
@@ -482,7 +485,7 @@
       friend.age += dt;
       friend.nectarTimer -= dt;
       if (friend.nectarTimer <= 0) {
-        state.nectarDrops.push({ x: friend.x, y: friend.y - 48, baseY: friend.y - 48, age: 0, life: 12, color: friend.color });
+        state.nectarDrops.push({ x: friend.x, y: friend.y - 48, baseY: friend.y - 48, age: 0, speed: 0, color: friend.color });
         friend.nectarTimer = (5.5 - friend.genome.speed * 2) / (ROLES[friend.role] || ROLES.sprout).nectar;
         burst(friend.x, friend.y - 42, "#f4b942", 4);
       }
@@ -566,15 +569,40 @@
         if (state.health <= 0) { endGame(); break; }
       }
     }
+    // Nectar collects itself. It bobs briefly over the friend that grew it, so you
+    // can see where it came from, then flies to the counter in the top-right corner
+    // and banks itself. Chasing drops around the field was busywork that competed
+    // with the taps that actually matter - growing a friend and digging one up.
     for (let i = state.nectarDrops.length - 1; i >= 0; i--) {
       const drop = state.nectarDrops[i];
-      drop.age += dt; drop.life -= dt; drop.y = drop.baseY + Math.sin(drop.age * 3) * 6;
-      if (drop.life <= 0) state.nectarDrops.splice(i, 1);
+      drop.age += dt;
+      if (drop.age < NECTAR_POP) {
+        drop.y = drop.baseY + Math.sin(drop.age * 9) * 5;
+        continue;
+      }
+      const home = nectarTarget();
+      const dx = home.x - drop.x, dy = home.y - drop.y;
+      const distance = Math.hypot(dx, dy) || 1;
+      drop.speed = Math.min(NECTAR_SPEED * 4, (drop.speed || NECTAR_SPEED) + NECTAR_ACCEL * dt);
+      if (distance <= Math.max(10, drop.speed * dt)) {
+        state.nectarDrops.splice(i, 1);
+        bankNectar(drop);
+        continue;
+      }
+      drop.x += dx / distance * drop.speed * dt;
+      drop.y += dy / distance * drop.speed * dt;
     }
     for (let i = state.particles.length - 1; i >= 0; i--) {
       const p = state.particles[i]; p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 60 * dt;
       if (p.life <= 0) state.particles.splice(i, 1);
     }
+  }
+
+  function bankNectar(drop) {
+    state.nectar += 1;
+    state.sparks = Math.min(SPARK_CAP, state.sparks + 1);
+    burst(nectarTarget().x, nectarTarget().y, drop ? drop.color : "#f4b942", 5);
+    updateUI(); renderOffers(); tone(720, .06, "sine");
   }
 
   function defeatEnemy(enemy) {
@@ -652,12 +680,17 @@
   }
 
   function drawNectar(drop) {
-    ctx.save(); ctx.translate(drop.x, drop.y); ctx.scale(friendScale(), friendScale());
-    ctx.globalAlpha = clamp(drop.life, 0, 1);
+    // Shrinks a little as it flies, so it reads as travelling away to the counter.
+    const shrink = drop.age < NECTAR_POP ? 1 : .72;
+    ctx.save(); ctx.translate(drop.x, drop.y);
+    ctx.scale(friendScale() * shrink, friendScale() * shrink);
+    ctx.globalAlpha = 1;
     ctx.fillStyle = "#f4b942"; ctx.strokeStyle = "#17221c"; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(0, -10); ctx.bezierCurveTo(10, -2, 8, 8, 0, 11); ctx.bezierCurveTo(-8, 8, -10, -2, 0, -10); ctx.fill(); ctx.stroke();
     ctx.fillStyle = "#fff7c2"; ctx.beginPath(); ctx.arc(-3, -3, 2, 0, Math.PI * 2); ctx.fill();
-    ctx.font = '500 8px "DM Mono", monospace'; ctx.textAlign = "center"; ctx.fillStyle = "#17221c"; ctx.fillText("+1", 0, 22);
+    if (drop.age < NECTAR_POP) {
+      ctx.font = '500 8px "DM Mono", monospace'; ctx.textAlign = "center"; ctx.fillStyle = "#17221c"; ctx.fillText("+1", 0, 22);
+    }
     ctx.restore(); ctx.globalAlpha = 1;
   }
 
@@ -690,7 +723,7 @@
     saveMemory();
   }
 
-  function collectNectar(event) {
+  function onArenaTap(event) {
     if (!state || state.over) return;
     const rect = canvas.getBoundingClientRect();
     const scaleX = width / rect.width, scaleY = height / rect.height;
@@ -717,20 +750,16 @@
       }
       return;
     }
-    const index = state.nectarDrops.findIndex(drop => Math.hypot(drop.x - x, drop.y - y) < 34);
-    if (index < 0) {
-      // No drop under the tap, so this is a request to grow whatever is there.
-      const reach = Math.max(26, width / 22);
-      let grown = null, best = Infinity;
-      for (const friend of state.friends) {
-        const distance = Math.hypot(friend.x - x, friend.y - y);
-        if (distance < reach && distance < best) { grown = friend; best = distance; }
-      }
-      if (grown) growFriend(grown);
-      return;
+    // Nectar banks itself now, so a tap on the field can only mean one thing: grow
+    // whatever is under it. No more reaching for a friend and pocketing a drop
+    // that happened to drift across.
+    const reach = Math.max(26, width / 22);
+    let grown = null, best = Infinity;
+    for (const friend of state.friends) {
+      const distance = Math.hypot(friend.x - x, friend.y - y);
+      if (distance < reach && distance < best) { grown = friend; best = distance; }
     }
-    state.nectarDrops.splice(index, 1); state.nectar++; state.sparks = Math.min(SPARK_CAP, state.sparks + 1);
-    updateUI(); renderOffers(); tone(720, .07, "sine"); announce("Nectar collected — +1 spark");
+    if (grown) growFriend(grown);
   }
 
   // Runs every frame, including while the game is paused or not yet started, so a
@@ -938,7 +967,7 @@
   ui.forget.addEventListener("click", () => { memory = { lineages: [], generation: 1, bestWave: 0 }; saveMemory(); start(); announce("Evolutionary memory cleared"); });
   ui.sound.addEventListener("click", () => { muted = !muted; ui.sound.classList.toggle("muted", muted); ui.sound.setAttribute("aria-label", muted ? "Turn sound on" : "Turn sound off"); if (!muted) tone(520, .06); });
   ui.playAgain.addEventListener("click", start);
-  canvas.addEventListener("pointerdown", collectNectar);
+  canvas.addEventListener("pointerdown", onArenaTap);
   window.addEventListener("resize", resize);
   document.addEventListener("visibilitychange", () => { lastTime = performance.now(); updateUI(); });
 
