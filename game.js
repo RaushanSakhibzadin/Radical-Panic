@@ -108,6 +108,7 @@
   const NECTAR_POP = .45;           // it hovers this long so you see where it came from
   const NECTAR_SPEED = 210, NECTAR_ACCEL = 900;
   const nectarTarget = () => ({ x: width / 2, y: height - 16 });   // bottom centre of the field
+  const EMOJI_FONT = '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
   const HIT_FLASH = .12;            // how long a damage blink lasts, in seconds
   const GROW_FITNESS = .5;          // spending sparks on a lineage is a loud preference
   const NOVELTY_CHANCE = .23;       // chance of drafting an entirely new lineage
@@ -773,8 +774,11 @@
       pen.clearRect(0, 0, PREVIEW_SIZE, PREVIEW_SIZE);
       pen.save();
       pen.translate(PREVIEW_SIZE / 2, PREVIEW_SIZE / 2);
-      const bounce = reducedMotion.matches ? 0 : Math.sin(clock * (2.5 + g.speed * 3)) * g.bounce * 7;
-      const wobble = (reducedMotion.matches ? 0 : Math.sin(clock * 2) * g.wobble * .15) + g.tilt;
+      // A quarter of the arena's amplitude. The preview still has to show off the
+      // motion genes - that is what you are selecting on - but three portraits
+      // bobbing at full tilt made the tray restless to read and to aim at.
+      const bounce = reducedMotion.matches ? 0 : Math.sin(clock * (1.6 + g.speed * 1.6)) * g.bounce * 1.8;
+      const wobble = (reducedMotion.matches ? 0 : Math.sin(clock * 1.2) * g.wobble * .05) + g.tilt * .6;
       pen.translate(0, bounce);
       pen.rotate(wobble);
       pen.scale(PREVIEW_SCALE, PREVIEW_SCALE);
@@ -796,41 +800,90 @@
     return previewEmotion(friend);
   }
 
+  // Emoji fill their glyph box very differently. An apple is a solid blob edge to
+  // edge, but a sun is a small disc surrounded by rays, so a fixed-size pair of
+  // eyes drawn at the centre spills straight off the body and onto the background.
+  // Rather than hand-tune the awkward ones, measure the glyph once: render it
+  // offscreen and find how wide the opaque body actually is at the eye line.
+  const FACE_REFERENCE = 38;   // body width, in px, that the face geometry assumes
+  const faceFits = new Map();
+  function faceFit(glyph) {
+    if (faceFits.has(glyph)) return faceFits.get(glyph);
+    let fit = 1;
+    try {
+      const size = 48, pad = 30, extent = size + pad * 2;
+      const probe = document.createElement("canvas");
+      probe.width = probe.height = extent;
+      const pen = probe.getContext("2d");
+      // Confirm this really is a canvas we can read pixels back from BEFORE drawing
+      // anything on it. Without the check, a stand-in context (a test double, or a
+      // browser that refuses readback) still gets painted on, and the measurement
+      // draw is indistinguishable from a real one.
+      const readback = pen.getImageData(0, 0, 1, 1);
+      if (!readback || !readback.data) throw new Error("no pixel readback");
+      pen.textAlign = "center"; pen.textBaseline = "middle";
+      pen.font = `${size}px ${EMOJI_FONT}`;
+      pen.fillText(glyph, extent / 2, extent / 2);
+      const centre = Math.round(extent / 2);
+      const row = pen.getImageData(0, centre - 8, extent, 1).data;
+      const solid = index => row[index * 4 + 3] > 40;
+      if (solid(centre)) {
+        let left = centre, right = centre;
+        while (left > 0 && solid(left - 1)) left -= 1;
+        while (right < extent - 1 && solid(right + 1)) right += 1;
+        fit = clamp((right - left) / FACE_REFERENCE, .5, 1);
+      } else {
+        // Nothing solid under the middle at all (an arc, a ring): keep the face
+        // small so it stays on whatever the glyph does have.
+        fit = .62;
+      }
+    } catch (_) {
+      fit = 1;   // no real canvas (tests, or a blocked readback) - assume it fits
+    }
+    faceFits.set(glyph, fit);
+    return fit;
+  }
+
   // Shared by planted defenders and the giant victory character; every emoji gets a full face.
   function drawEmojiFace(pen, friend, emotion, blink = false) {
     const g = friend.genome, scared = emotion === "scared", hurt = emotion === "hurt", joy = emotion === "joy";
     pen.save(); pen.globalAlpha = 1;
     pen.fillStyle = "#17221c";
-    pen.font = '48px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
+    pen.font = `48px ${EMOJI_FONT}`;
     pen.textAlign = "center"; pen.textBaseline = "middle"; pen.fillText(friend.emoji, 0, 0);
-    const eyeSize = (5 + g.eyeSize * 5) * (scared ? 1.15 : 1), gap = 4 + g.eyeGap * 9;
+    // Everything below is scaled to the body we actually measured, so the eyes sit
+    // on the emoji rather than beside it.
+    const fit = faceFit(friend.emoji);
+    const eyeSize = (5 + g.eyeSize * 5) * (scared ? 1.15 : 1) * fit, gap = (4 + g.eyeGap * 9) * fit;
     pen.lineCap = "round";
     for (const side of [-1, 1]) {
       pen.fillStyle = "white"; pen.strokeStyle = "#17221c"; pen.lineWidth = 1.3; pen.beginPath();
-      pen.ellipse(side * gap, -8, eyeSize, blink || hurt ? 1 : eyeSize * 1.18, 0, 0, Math.PI * 2); pen.fill(); pen.stroke();
+      pen.ellipse(side * gap, -8 * fit, eyeSize, blink || hurt ? 1 : eyeSize * 1.18, 0, 0, Math.PI * 2); pen.fill(); pen.stroke();
       if (!blink && !hurt) {
         pen.fillStyle = "#17221c"; pen.beginPath();
-        if (joy) pen.arc(side * gap, -5, 3, Math.PI, Math.PI * 2);
-        else pen.arc(side * gap, -6, scared ? 1.6 : 2.2, 0, Math.PI * 2);
+        if (joy) pen.arc(side * gap, -5 * fit, 3 * fit, Math.PI, Math.PI * 2);
+        else pen.arc(side * gap, -6 * fit, (scared ? 1.6 : 2.2) * fit, 0, Math.PI * 2);
         if (joy) pen.stroke(); else pen.fill();
       }
-      const browY = -12 - eyeSize * 1.18;
-      pen.beginPath(); pen.moveTo(side * gap - 4, browY + (emotion === "determined" ? -side * 2 : 0));
-      pen.lineTo(side * gap + 4, browY + (emotion === "determined" ? side * 2 : scared ? -side * 2 : 0)); pen.stroke();
+      const browY = (-12 * fit) - eyeSize * 1.18;
+      pen.beginPath(); pen.moveTo(side * gap - 4 * fit, browY + (emotion === "determined" ? -side * 2 : 0));
+      pen.lineTo(side * gap + 4 * fit, browY + (emotion === "determined" ? side * 2 : scared ? -side * 2 : 0)); pen.stroke();
       if (joy || emotion === "happy") {
-        pen.fillStyle = "#f78999"; pen.beginPath(); pen.ellipse(side * (gap + 5), 3, 4, 2, 0, 0, Math.PI * 2); pen.fill();
+        pen.fillStyle = "#f78999"; pen.beginPath(); pen.ellipse(side * (gap + 5 * fit), 3 * fit, 4 * fit, 2 * fit, 0, 0, Math.PI * 2); pen.fill();
       }
     }
     pen.strokeStyle = "#17221c"; pen.fillStyle = "#17221c"; pen.lineWidth = 1.5; pen.beginPath();
     if (scared || emotion === "curious") {
-      pen.ellipse(0, 9, scared ? 4 : 2.5, scared ? 6 : 3.5, 0, 0, Math.PI * 2); pen.fill();
+      pen.ellipse(0, 9 * fit, (scared ? 4 : 2.5) * fit, (scared ? 6 : 3.5) * fit, 0, 0, Math.PI * 2); pen.fill();
     } else if (hurt) {
-      pen.moveTo(-6, 11); pen.quadraticCurveTo(0, 3, 6, 11); pen.stroke();
+      pen.moveTo(-6 * fit, 11 * fit); pen.quadraticCurveTo(0, 3 * fit, 6 * fit, 11 * fit); pen.stroke();
     } else if (emotion === "determined") {
-      pen.fillStyle = "white"; pen.rect(-6, 7, 12, 5); pen.fill(); pen.stroke();
+      pen.fillStyle = "white"; pen.rect(-6 * fit, 7 * fit, 12 * fit, 5 * fit); pen.fill(); pen.stroke();
     } else {
-      pen.moveTo(-7, 6); pen.lineTo(7, 6); pen.quadraticCurveTo(0, joy ? 25 : 20, -7, 6); pen.fill(); pen.stroke();
-      pen.fillStyle = "#ff879b"; pen.beginPath(); pen.ellipse(0, joy ? 13 : 11, 3, 2, 0, 0, Math.PI * 2); pen.fill();
+      pen.moveTo(-7 * fit, 6 * fit); pen.lineTo(7 * fit, 6 * fit);
+      pen.quadraticCurveTo(0, (joy ? 25 : 20) * fit, -7 * fit, 6 * fit); pen.fill(); pen.stroke();
+      pen.fillStyle = "#ff879b"; pen.beginPath();
+      pen.ellipse(0, (joy ? 13 : 11) * fit, 3 * fit, 2 * fit, 0, 0, Math.PI * 2); pen.fill();
     }
     pen.restore();
   }

@@ -29,7 +29,7 @@ function boot(saved, blocked = false) {
     localStorage: { getItem() { if (blocked) throw Error('Storage blocked'); return stored ?? null; }, setItem(_, value) { if (blocked) throw Error('Storage blocked'); stored = value; } },
     setTimeout() {}, clearTimeout() {}, requestAnimationFrame() {} });
   const source = fs.readFileSync(require.resolve('../game.js'), 'utf8').replace('start(); requestAnimationFrame(frame);',
-    'start(); globalThis.game = { get state() { return state; }, get memory() { return memory; }, selectOffer, randomGenome, chooseParent, rememberChoices, update, resize, draw, start, renderOffers, emotionFor, drawEmojiFace, EMOJI, RADICALS, RADICAL_COLORS, MAX_LEVEL, affinity, damageMultiplier, radicalLabel, radicalGlyph, radicalColor, decayLineages, drawOfferPreviews, previewEmotion, roleOf, ROLES, growFriend, GROW_COSTS, MAX_TIER, HIT_FLASH };');
+    'start(); globalThis.game = { get state() { return state; }, get memory() { return memory; }, selectOffer, randomGenome, chooseParent, rememberChoices, update, resize, draw, start, renderOffers, emotionFor, drawEmojiFace, EMOJI, RADICALS, RADICAL_COLORS, MAX_LEVEL, affinity, damageMultiplier, radicalLabel, radicalGlyph, radicalColor, decayLineages, drawOfferPreviews, previewEmotion, roleOf, ROLES, growFriend, GROW_COSTS, MAX_TIER, HIT_FLASH, faceFit };');
   vm.runInContext(source, context);
   return { game: context.game, elements, context, drawnText, textStyles, stored: () => stored };
 }
@@ -791,4 +791,22 @@ test('a radical keeps its own colour when hit or chilled - it only blinks', () =
   // ...and it fades, so the real colour comes back rather than hanging around.
   const fading = paint((enemy, game) => { enemy.hit = game.HIT_FLASH * .25; });
   assert.ok(fading[1].alpha < hit[1].alpha, 'the blink must fade out');
+});
+
+test('measuring a glyph never paints on a context it cannot read back', () => {
+  const { game, textStyles } = boot();
+  // The harness's canvas double has no working getImageData. The measurement must
+  // detect that and bail BEFORE drawing, or its probe stroke is indistinguishable
+  // from a real one - which is exactly how it first showed up, as a planted emoji
+  // appearing to be drawn three times instead of twice.
+  textStyles.length = 0;
+  const fit = game.faceFit('\uD83C\uDF4E');
+  assert.equal(textStyles.length, 0, 'the probe must not draw when it cannot measure');
+  assert.equal(fit, 1, 'and it must fall back to the unscaled face');
+
+  // Whatever it returns is a usable scale, never zero or negative.
+  for (const emoji of game.EMOJI.slice(0, 20)) {
+    const value = game.faceFit(emoji);
+    assert.ok(Number.isFinite(value) && value > 0 && value <= 1, `${emoji} -> ${value}`);
+  }
 });

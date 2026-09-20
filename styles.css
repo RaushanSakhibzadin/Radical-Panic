@@ -82,7 +82,10 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--blue); outline-
 .hint { color: rgba(23,34,28,.64); line-height: 1.4; font-size: 13px; }
 .choices { display: grid; gap: 10px; margin: 10px 0 14px; }
 .choice { position: relative; display: grid; grid-template-columns: 65px 1fr 23px; align-items: center; gap: 11px; min-height: 92px; width: 100%; padding: 12px; border: 1.5px solid var(--ink); border-radius: 15px; background: #fffdf8; text-align: left; cursor: pointer; transition: transform .16s, box-shadow .16s, background .16s; }
-.choice:hover, .choice:focus-visible { transform: translate(-3px,-3px); box-shadow: 4px 4px 0 var(--ink); outline: 0; background: white; }
+/* Lifting the card by 3px meant every card jumped as the cursor crossed it, which
+   made the tray feel like it was shifting under you. The shadow alone reads as
+   raised without moving anything. */
+.choice:hover, .choice:focus-visible { box-shadow: 4px 4px 0 var(--ink); outline: 0; background: white; }
 .choice:disabled { cursor: not-allowed; opacity: .5; transform: none; box-shadow: none; }
 /* The preview is now drawn by the same canvas routine as the arena, so the face
    you choose from is exactly the face you get. The wiggle lives in the genome and
