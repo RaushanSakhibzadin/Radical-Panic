@@ -18,6 +18,15 @@ body {
   color: var(--ink);
   background: var(--cream);
   font-family: "Fredoka", system-ui, sans-serif;
+  /* Double-tapping anything on this page used to fire the browser's own
+     double-tap-to-zoom. The arena canvas already opted out, but the mutation tray
+     did not - so tapping a card twice to pick a friend zoomed the whole page.
+     `manipulation` removes the double-tap gesture (and its 300ms click delay)
+     while leaving panning and pinch-zoom alone, so anyone who needs to zoom in
+     still can. That is why this is not `user-scalable=no` on the viewport tag,
+     which would take pinch-zoom away from people who rely on it. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 button, a { font: inherit; }
@@ -33,6 +42,13 @@ button { color: inherit; }
 }
 
 .shell { width: min(1180px, calc(100% - 40px)); margin: 0 auto; }
+/* Belt and braces on the controls themselves, and no text selection popping up
+   when a tap is held or repeated. */
+button, .choice, .skip-button, .shovel-button, .brand, .donate-button {
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
 .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
 
 .topbar {
