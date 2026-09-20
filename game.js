@@ -13,7 +13,7 @@
     victoryEmoji: document.querySelector("#victory-emoji"), victoryCaption: document.querySelector("#victory-caption")
   };
 
-  const EMOJI = ["🌵", "🍄", "🌸", "🍀", "🌙", "⭐", "☁️", "🔥", "💧", "🍋", "🥑", "🪨", "🌷", "🌻", "🌼", "🌱", "🌿", "🍁", "🍂", "🍃", "🌾", "🌳", "🌲", "🌴", "🌰", "🍇", "🍈", "🍉", "🍊", "🍌", "🍍", "🥭", "🍎", "🍏", "🍐", "🍑", "🍒", "🍓", "🫐", "🥝", "🍅", "🥥", "🍆", "🥔", "🥕", "🌽", "🫑", "🥒", "🥬", "🥦", "🧄", "🧅", "🥜", "🍞", "🥐", "🥖", "🥨", "🥯", "🥞", "🧇", "🧀", "🍕", "🍿", "🍙", "🍚", "🍡", "🍦", "🍧", "🍨", "🍩", "🍪", "🎂", "🧁", "🍫", "🍬", "🍭", "🧊", "🧶", "🧵", "🧩", "🪁", "🫧", "❄️", "🌈"];
+  const EMOJI = ["🌵", "🌸", "🍀", "⭐", "☁️", "🔥", "💧", "🍋", "🥑", "🪨", "🌷", "🌼", "🌱", "🍂", "🌾", "🌳", "🌲", "🌴", "🌰", "🍇", "🍊", "🥭", "🍎", "🍏", "🍐", "🍓", "🫐", "🥝", "🍅", "🥔", "🥕", "🫑", "🥬", "🥦", "🧄", "🧅", "🥜", "🍞", "🥐", "🥖", "🥨", "🥯", "🥞", "🧇", "🧀", "🍕", "🍿", "🍙", "🍚", "🍡", "🍦", "🍧", "🍨", "🍩", "🍪", "🎂", "🧁", "🍫", "🍬", "🧊", "🧶", "🧵", "🪁", "🫧", "🌊", "🌧️", "☀️", "🫓", "🥙", "🧆", "🥗", "🍲", "🥣", "🍛", "🍜", "🥟", "🥠", "🍥", "🥮", "🧈", "🧂", "🥫", "🫖", "☕", "🧃", "🥤", "🧱", "🔔", "💎", "🎁", "🎈", "🪴", "🌺", "🪻", "🌶️", "⚽", "🏀", "🏐", "🪀", "🎲"];
   // Every Kangxi radical, in Unicode order: radical 1 is index 0, radical 214 is index 213.
   // Each entry is the ordinary CJK ideograph (far better font coverage than the
   // U+2F00 compatibility block) followed by its English name. Generated from the
@@ -45,14 +45,13 @@
   // Semantic advantages, not arbitrary colour matchups. Unlisted emoji and
   // abstract radicals are neutral; this is a game rule, not language instruction.
   const AFFINITIES = {
-    water: { label: "Water", emoji: ["💧", "🌊", "🌧️", "☔"] },
-    fire: { label: "Fire", emoji: ["🔥", "🕯️"] },
-    cold: { label: "Cold", emoji: ["🧊", "❄️", "🍦", "🍧", "🍨"] },
-    plant: { label: "Plant", emoji: ["🌵", "🌸", "🍀", "🌷", "🌻", "🌼", "🌱", "🌿", "🌾", "🌳", "🌲", "🌴", "🥬", "🥦"] },
+    water: { label: "Water", emoji: ["💧", "🌊", "🌧️"] },
+    fire: { label: "Fire", emoji: ["🔥", "🌶️"] },
+    cold: { label: "Cold", emoji: ["🧊", "🍦", "🍧", "🍨"] },
+    plant: { label: "Plant", emoji: ["🌵", "🌸", "🍀", "🌷", "🌼", "🌱", "🌾", "🌳", "🌲", "🌴", "🥬", "🥦", "🪴", "🌺", "🪻", "🥗"] },
     shade: { label: "Shade", emoji: ["☁️"] },
     light: { label: "Light", emoji: ["☀️", "⭐"] }
   };
-  EMOJI.push("🌊", "🌧️", "☔", "🕯️", "☀️");
   const RADICAL_INFO = {
     "⼈": { name: "person", counters: [] }, "⼝": { name: "mouth", counters: [] },
     "⼭": { name: "mountain", counters: ["water"] }, "⽕": { name: "fire", counters: ["water", "cold"] },

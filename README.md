@@ -57,7 +57,7 @@ node --test tests/game.test.cjs
 ## Design boundaries
 
 - Attackers come from the Unicode Kangxi Radicals block, with a small English meaning underneath each glyph.
-- Defenders come from a curated collection of nature, food, weather, or object emoji with no built-in eyes and no intended political meaning. Emoji appearance varies by device; additions should be checked across common platforms.
+- Defenders come from a curated collection of nature, food, weather and object emoji with no built-in eyes and no second meaning — nothing political, national, religious, racial, sexual or drug-related that an ordinary player would recognise. [docs/ROSTER.md](docs/ROSTER.md) lists what was removed and why, and what was deliberately kept. Emoji appearance varies by device; additions should be checked across common platforms.
 - Added eyes are drawn in code; the game contains no external image assets.
 - The game makes **no third-party requests**. Fonts are served from this repository rather than from Google, so nothing about a player reaches any other host — see [docs/FONTS.md](docs/FONTS.md).
 - Recruitment and controls work with mouse, touch, or keyboard; combat is automatic. Reduced-motion preferences disable decorative motion in previews and the arena.
