@@ -516,6 +516,9 @@
           x: friend.x, y: friend.y - 12, target, speed: travel,
           damage: (4 + friend.genome.power * 12) * multiplier * role.dmg * tierPower(friend.tier),
           multiplier, color: role.accent || friend.color,
+          // A shot is a small copy of whoever fired it, so you can see at a glance
+          // which of your friends is doing the work.
+          emoji: friend.emoji, spin: random(-7, 7), age: 0,
           chills: !!role.chills, splash: role.lobs ? 78 : 0
         });
         friend.cooldown = (1.15 - friend.genome.speed * .72) / (role.rate * tierRate(friend.tier));
@@ -525,6 +528,7 @@
 
     for (let i = state.projectiles.length - 1; i >= 0; i--) {
       const shot = state.projectiles[i];
+      shot.age = (shot.age || 0) + dt;
       if (!state.enemies.includes(shot.target)) { state.projectiles.splice(i, 1); continue; }
       const dx = shot.target.x - shot.x, dy = shot.target.y - shot.y, distance = Math.hypot(dx, dy);
       if (distance < Math.max(10, shot.speed * dt)) {
@@ -862,10 +866,7 @@
     for (const drop of state.nectarDrops) drawNectar(drop);
     for (const friend of state.friends) drawFriend(friend);
     for (const enemy of state.enemies) drawEnemy(enemy);
-    for (const shot of state.projectiles) {
-      ctx.fillStyle = shot.color; ctx.beginPath(); ctx.arc(shot.x, shot.y, 4, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = "#17221c"; ctx.stroke();
-    }
+    for (const shot of state.projectiles) drawShot(shot);
     for (const p of state.particles) {
       ctx.globalAlpha = clamp(p.life * 2, 0, 1); ctx.fillStyle = p.color;
       if (p.text) { ctx.font = 'bold 16px "Fredoka", sans-serif'; ctx.textAlign = "center"; ctx.fillText(p.text, p.x, p.y); }
@@ -897,6 +898,32 @@
       ctx.fillStyle = accent;
       ctx.beginPath(); ctx.arc(friend.x - 6 + pip * 6, friend.y + 45, 2.1, 0, Math.PI * 2); ctx.fill();
     }
+  }
+
+  // A shot is the firer's own emoji, shrunk and stripped of its face - no eyes,
+  // no brows, no mouth. The face belongs to the friend, not to what it throws.
+  // A ring in the job's colour rides underneath so a Frost shot still reads as
+  // cold and a Lobber's as a lobbed one.
+  // Takes its context the way drawEmojiFace does, so it can be drawn anywhere and
+  // inspected in a test rather than only ever hitting the arena.
+  function drawShot(shot, pen = ctx) {
+    const size = 12 + 9 * friendScale();
+    pen.save();
+    pen.translate(shot.x, shot.y);
+    pen.globalAlpha = .5;
+    pen.fillStyle = shot.color;
+    pen.beginPath();
+    pen.arc(0, 0, size * .62, 0, Math.PI * 2);
+    pen.fill();
+    pen.globalAlpha = 1;
+    if (!reducedMotion.matches) pen.rotate(shot.age * shot.spin);
+    pen.font = `${Math.round(size)}px ${EMOJI_FONT}`;
+    pen.textAlign = "center";
+    pen.textBaseline = "middle";
+    // Keeps a monochrome fallback glyph visible rather than invisible.
+    pen.fillStyle = "#17221c";
+    pen.fillText(shot.emoji, 0, 0);
+    pen.restore();
   }
 
   function drawNectar(drop) {

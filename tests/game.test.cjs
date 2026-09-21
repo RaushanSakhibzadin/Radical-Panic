@@ -29,7 +29,7 @@ function boot(saved, blocked = false) {
     localStorage: { getItem() { if (blocked) throw Error('Storage blocked'); return stored ?? null; }, setItem(_, value) { if (blocked) throw Error('Storage blocked'); stored = value; } },
     setTimeout() {}, clearTimeout() {}, requestAnimationFrame() {} });
   const source = fs.readFileSync(require.resolve('../game.js'), 'utf8').replace('start(); requestAnimationFrame(frame);',
-    'start(); globalThis.game = { get state() { return state; }, get memory() { return memory; }, selectOffer, randomGenome, chooseParent, rememberChoices, update, resize, draw, start, renderOffers, emotionFor, drawEmojiFace, EMOJI, RADICALS, RADICAL_COLORS, MAX_LEVEL, affinity, damageMultiplier, radicalLabel, radicalGlyph, radicalColor, decayLineages, drawOfferPreviews, previewEmotion, roleOf, ROLES, growFriend, GROW_COSTS, MAX_TIER, HIT_FLASH, faceFit };');
+    'start(); globalThis.game = { get state() { return state; }, get memory() { return memory; }, selectOffer, randomGenome, chooseParent, rememberChoices, update, resize, draw, start, renderOffers, emotionFor, drawEmojiFace, EMOJI, RADICALS, RADICAL_COLORS, MAX_LEVEL, affinity, damageMultiplier, radicalLabel, radicalGlyph, radicalColor, decayLineages, drawOfferPreviews, previewEmotion, roleOf, ROLES, growFriend, GROW_COSTS, MAX_TIER, HIT_FLASH, faceFit, drawShot };');
   vm.runInContext(source, context);
   return { game: context.game, elements, context, drawnText, textStyles, stored: () => stored };
 }
@@ -809,4 +809,37 @@ test('measuring a glyph never paints on a context it cannot read back', () => {
     const value = game.faceFit(emoji);
     assert.ok(Number.isFinite(value) && value > 0 && value <= 1, `${emoji} -> ${value}`);
   }
+});
+
+test('a shot is a mini copy of its firer, with no face on it', () => {
+  const { game } = boot();
+  game.selectOffer(game.state.offers[0]);
+  const friend = game.state.friends[0];
+  friend.role = 'sprout'; friend.cooldown = 0;
+  game.state.enemies.push({ char: '\u2F55', x: friend.x, y: friend.y - 60, hp: 9999, maxHp: 9999,
+    phase: 0, hit: 0, speed: 0, drift: 0, size: 40 });
+  game.update(.01);
+  assert.equal(game.state.projectiles.length, 1);
+  const shot = game.state.projectiles[0];
+  assert.equal(shot.emoji, friend.emoji, 'the shot carries the firer\'s emoji');
+
+  // Record everything drawShot does.
+  const calls = [];
+  const pen = new Proxy({}, {
+    get: (_, key) => key === 'fillStyle' || key === 'font' || key === 'globalAlpha'
+      ? undefined
+      : (...args) => calls.push([String(key), ...args]),
+    set: (target, key, value) => { calls.push(['SET ' + String(key), value]); return true; }
+  });
+  game.drawShot(shot, pen);
+
+  const texts = calls.filter(([k]) => k === 'fillText').map(([, text]) => text);
+  assert.deepEqual(texts, [friend.emoji], 'it draws the emoji, once, and nothing else');
+  // The face routine paints the eye whites white; a shot must never do that.
+  const fills = calls.filter(([k]) => k === 'SET fillStyle').map(([, v]) => v);
+  assert.ok(!fills.includes('white'), 'no eye whites - a shot has no face');
+  assert.ok(!fills.includes('#ff879b'), 'and no mouth');
+  // No eye or mouth geometry either.
+  assert.equal(calls.filter(([k]) => k === 'quadraticCurveTo').length, 0, 'no mouth curve');
+  assert.ok(calls.filter(([k]) => k === 'ellipse').length === 0, 'no eye ellipses');
 });
