@@ -1111,9 +1111,16 @@
         else pen.arc(side * gap, -6 * fit, (scared ? 1.6 : 2.2) * fit, 0, Math.PI * 2);
         if (joy) pen.stroke(); else pen.fill();
       }
-      const browY = (-12 * fit) - eyeSize * 1.18;
-      pen.beginPath(); pen.moveTo(side * gap - 4 * fit, browY + (emotion === "determined" ? -side * 2 : 0));
-      pen.lineTo(side * gap + 4 * fit, browY + (emotion === "determined" ? side * 2 : scared ? -side * 2 : 0)); pen.stroke();
+      // Brows sit above the eyes, which on a flat wide emoji puts them off the body
+      // entirely. At normal size that reads as raised eyebrows; on the giant
+      // celebration champion it read as two stray bars floating over the scene. The
+      // joy face does not need them - the eyes are already closed happy arcs - so it
+      // goes without.
+      if (!joy) {
+        const browY = (-12 * fit) - eyeSize * 1.18;
+        pen.beginPath(); pen.moveTo(side * gap - 4 * fit, browY + (emotion === "determined" ? -side * 2 : 0));
+        pen.lineTo(side * gap + 4 * fit, browY + (emotion === "determined" ? side * 2 : scared ? -side * 2 : 0)); pen.stroke();
+      }
       if (joy || emotion === "happy") {
         pen.fillStyle = "#f78999"; pen.beginPath(); pen.ellipse(side * (gap + 5 * fit), 3 * fit, 4 * fit, 2 * fit, 0, 0, Math.PI * 2); pen.fill();
       }
@@ -1140,8 +1147,11 @@
     const pen = ui.victoryEmoji.getContext("2d");
     pen.clearRect(0, 0, 600, 600);
     pen.save(); pen.translate(300, 300);
-    pen.fillStyle = champion.color; pen.beginPath(); pen.arc(0, 0, 235, 0, Math.PI * 2); pen.fill();
-    pen.scale(8, 8); drawEmojiFace(pen, champion, "joy"); pen.restore();
+    // No disc behind it. The champion was sitting on a flat circle in its own
+    // colour, which read as a badge rather than as the emoji cheering. Without it
+    // the glyph can be larger, since it no longer has to fit inside a frame - and
+    // the overlay's drop-shadow now falls on the emoji's own outline.
+    pen.scale(9.6, 9.6); drawEmojiFace(pen, champion, "joy"); pen.restore();
     ui.victoryCaption.textContent = `Level ${state.wave} won!`;
     ui.victory.hidden = false;
   }
