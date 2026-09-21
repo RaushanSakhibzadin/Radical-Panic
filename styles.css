@@ -120,9 +120,15 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--blue); outline-
 .specimen[data-emotion="determined"] .mini-mouth::after { display: none; }
 .specimen[data-emotion="determined"] .mini-eyes::before, .specimen[data-emotion="determined"] .mini-eyes::after { content: ""; position: absolute; top: -3px; width: 12px; height: 2px; background: var(--ink); transform: rotate(18deg); }
 .specimen[data-emotion="determined"] .mini-eyes::after { right: 0; transform: rotate(-18deg); }
-.victory { position: fixed; z-index: 20; right: 2vw; top: 50%; transform: translateY(-50%); width: min(55vw, 72vh); pointer-events: none; text-align: center; filter: drop-shadow(0 12px 18px #17221c35); }
+/* The celebration fills the screen and sits in the middle of it. It used to be
+   pinned to the right edge at a little over half the width, which on a desktop or
+   an iPad left it stranded off to one side instead of taking the moment.
+   `inset: 0` plus grid centring keeps it centred at any aspect ratio, and sizing
+   the canvas in vmin means it fills a tall screen and a wide one equally. */
+.victory { position: fixed; inset: 0; z-index: 20; display: grid; grid-auto-flow: row; place-content: center; justify-items: center; pointer-events: none; text-align: center; filter: drop-shadow(0 12px 18px #17221c35); }
+/* Higher specificity than the rule above, so `hidden` still wins over `display: grid`. */
 .victory[hidden] { display: none; }
-.victory canvas { display: block; width: 100%; height: auto; animation: victory-dance 3.2s ease-in-out both; }
+.victory canvas { display: block; width: min(86vmin, 94vw); height: auto; animation: victory-dance 3.2s ease-in-out both; }
 .victory p { display: inline-block; max-width: 95%; margin: -8% 0 0; position: relative; padding: 12px 22px; border: 3px solid var(--ink); border-radius: 24px; background: var(--paper); font-size: clamp(20px, 3vw, 40px); box-shadow: 4px 4px 0 var(--coral); }
 .victory.is-paused canvas { animation-play-state: paused; }
 @keyframes victory-dance {
@@ -187,7 +193,7 @@ footer a { color: inherit; }
 }
 
 @media (max-width: 620px) {
-  .victory { width: min(92vw, 65vh); right: 4vw; }
+  .victory canvas { width: min(94vmin, 94vw); }
   .shell { width: min(100% - 22px, 1180px); }
   .topbar { height: auto; padding: 14px 0; flex-wrap: wrap; gap: 14px; }
   .brand { order: 1; }.header-actions { order: 2; }.run-stats { order: 3; width: 100%; }.run-stats div { flex: 1; }
