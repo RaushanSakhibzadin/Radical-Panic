@@ -29,7 +29,7 @@ function boot(saved, blocked = false) {
     localStorage: { getItem() { if (blocked) throw Error('Storage blocked'); return stored ?? null; }, setItem(_, value) { if (blocked) throw Error('Storage blocked'); stored = value; } },
     setTimeout() {}, clearTimeout() {}, requestAnimationFrame() {} });
   const source = fs.readFileSync(require.resolve('../game.js'), 'utf8').replace('start(); requestAnimationFrame(frame);',
-    'start(); globalThis.game = { get state() { return state; }, get memory() { return memory; }, selectOffer, randomGenome, chooseParent, rememberChoices, update, resize, draw, start, renderOffers, emotionFor, drawEmojiFace, EMOJI, RADICALS, RADICAL_COLORS, MAX_LEVEL, affinity, damageMultiplier, radicalLabel, radicalGlyph, radicalColor, decayLineages, drawOfferPreviews, previewEmotion, roleOf, ROLES, growFriend, GROW_COSTS, MAX_TIER, HIT_FLASH, faceFit, drawShot };');
+    'start(); globalThis.game = { get state() { return state; }, get memory() { return memory; }, selectOffer, randomGenome, chooseParent, rememberChoices, update, resize, draw, start, renderOffers, emotionFor, drawEmojiFace, EMOJI, RADICALS, RADICAL_FAMILIES, RADICAL_FAMILY, radicalFamily, MAX_LEVEL, affinity, damageMultiplier, radicalLabel, radicalGlyph, radicalColor, decayLineages, drawOfferPreviews, previewEmotion, roleOf, ROLES, growFriend, GROW_COSTS, MAX_TIER, HIT_FLASH, faceFit, drawShot };');
   vm.runInContext(source, context);
   return { game: context.game, elements, context, drawnText, textStyles, stored: () => stored };
 }
@@ -227,8 +227,32 @@ test('radicals use meaning colours and remain visible across every radical type'
   game.draw();
   assert.equal(game.RADICALS.length, 214);
   assert.equal(new Set(game.RADICALS).size, 214);
-  // Every radical is visually distinct now, not just the fourteen hand-coloured ones.
-  assert.equal(new Set(game.RADICALS.map(game.radicalColor)).size, 214);
+  // Colour carries meaning rather than being a per-radical fingerprint, so members
+  // of a family deliberately share a hue. What must hold is that the meaning is
+  // right - the old scheme gave 赤 "red" a purple and 黑 "black" a yellow.
+  const hueOf = radical => Number(game.radicalColor(radical).match(/hsl\((\d+(?:\.\d+)?)/)[1]);
+  const byName = new Map(game.RADICALS.map(r => [game.radicalLabel(r), r]));
+  const near = (hue, target, slack = 22) => Math.min(Math.abs(hue - target), 360 - Math.abs(hue - target)) <= slack;
+
+  assert.ok(near(hueOf(byName.get('red')), 0), 'red must be red');
+  assert.ok(near(hueOf(byName.get('yellow')), 45), 'yellow must be yellow');
+  assert.ok(near(hueOf(byName.get('blue')), 200, 30), 'blue must be blue');
+  assert.ok(near(hueOf(byName.get('gold')), 45), 'gold must be gold, not steel');
+  // Black is dark and white is light, whatever their hue.
+  const lightOf = radical => Number(game.radicalColor(radical).match(/([\d.]+)%\)$/)[1]);
+  assert.ok(lightOf(byName.get('black')) < 32, 'black must be dark');
+  assert.ok(lightOf(byName.get('white')) > 68, 'white must be light');
+
+  // Things that mean the same sort of thing look alike.
+  for (const group of [['water', 'rain', 'river'], ['tree', 'bamboo', 'grass'], ['horse', 'bird', 'fish']]) {
+    const hues = group.map(n => hueOf(byName.get(n)));
+    assert.ok(hues.every(h => near(h, hues[0], 8)), `${group} should share a hue, got ${hues}`);
+  }
+  // Fire and water must not be confusable.
+  assert.ok(!near(hueOf(byName.get('fire')), hueOf(byName.get('water')), 60));
+  // And there is still real variety on screen.
+  assert.ok(new Set(game.RADICALS.map(game.radicalColor)).size > 60);
+  assert.ok(new Set(game.RADICALS.map(r => game.radicalFamily(r).name)).size >= 20);
   assert.ok(elements.get('#arena'));
   assert.ok(drawnText.some(([text]) => text === 'WATER'));
   assert.ok(drawnText.some(([text]) => text === 'FIRE'));
@@ -395,7 +419,7 @@ test('every radical has an English name and a widely-supported CJK glyph, never 
   }
   assert.equal(game.radicalLabel('\u2F55'), 'fire');
   assert.equal(game.radicalGlyph('\u2F55'), '\u706b');
-  assert.equal(new Set(game.RADICALS.map(game.radicalColor)).size, 214, 'each radical needs its own colour');
+  assert.ok(game.RADICALS.every(r => /^hsl\(/.test(game.radicalColor(r))), 'each radical needs a colour');
 });
 
 test('a consistent player breeds their preference without collapsing the pool to one species', () => {
