@@ -61,12 +61,44 @@
     "⼟": { name: "earth", counters: ["plant"] }, "⽥": { name: "field", counters: ["cold"] },
     "⼒": { name: "strength", counters: [] }, "⾨": { name: "gate", counters: [] }
   };
-  const RADICAL_COLORS = {
-    "⽔": "#2f80c9", "⽕": "#ed6a3a", "⽊": "#4d9143", "⼭": "#7650a8", "⼟": "#a06a3b",
-    "⽇": "#e2a51c", "⽉": "#5864ad", "⽥": "#7c9b42", "⼼": "#d14d72", "⼿": "#c17b37",
-    "⼈": "#55706b", "⼝": "#9b4e74", "⼒": "#8a4f9e", "⾨": "#53606b"
+  // Radical colour follows meaning. Every radical belongs to a family - water,
+  // fire, plant, animal, body, tool and so on - and takes that family's hue. The
+  // five whose meaning IS a colour (red, yellow, black, white, blue) get that
+  // colour, which the old scheme got comically wrong: 赤 "red" came out purple and
+  // 黑 "black" came out yellow, because 200 of the 214 were assigned a hue by
+  // golden-angle rotation with no reference to meaning at all.
+  //
+  // Lightness is nudged a little per radical so two in the same family are still
+  // told apart while the family still reads at a glance. See docs/RADICALS.md.
+  const RADICAL_FAMILIES = {
+    w: { name: "water", h: 208, s: 62, l: 49 },
+    i: { name: "ice", h: 201, s: 66, l: 69 },
+    f: { name: "fire", h: 13, s: 79, l: 57 },
+    s: { name: "sun", h: 41, s: 76, l: 50 },
+    m: { name: "moon", h: 231, s: 35, l: 52 },
+    p: { name: "plant", h: 112, s: 37, l: 42 },
+    e: { name: "earth", h: 28, s: 46, l: 43 },
+    t: { name: "tool", h: 210, s: 13, l: 50 },
+    G: { name: "gold", h: 44, s: 70, l: 47 },
+    a: { name: "animal", h: 341, s: 45, l: 57 },
+    b: { name: "body", h: 347, s: 39, l: 52 },
+    c: { name: "cloth", h: 174, s: 43, l: 43 },
+    v: { name: "voice", h: 233, s: 34, l: 52 },
+    g: { name: "spirit", h: 266, s: 35, l: 49 },
+    h: { name: "shelter", h: 217, s: 13, l: 45 },
+    o: { name: "motion", h: 105, s: 15, l: 53 },
+    n: { name: "wind", h: 196, s: 35, l: 69 },
+    L: { name: "blood", h: 2, s: 56, l: 42 },
+    R: { name: "red", h: 3, s: 60, l: 50 },
+    B: { name: "blue", h: 189, s: 59, l: 45 },
+    Y: { name: "yellow", h: 43, s: 69, l: 51 },
+    K: { name: "black", h: 218, s: 9, l: 25 },
+    W: { name: "white", h: 204, s: 11, l: 73 },
+    J: { name: "jade", h: 166, s: 44, l: 44 },
+    V: { name: "wine", h: 333, s: 27, l: 43 },
+    x: { name: "abstract", h: 221, s: 11, l: 46 },
   };
-  const affinity = emoji => Object.entries(AFFINITIES).find(([, group]) => group.emoji.includes(emoji))?.[0] || "neutral";
+  const RADICAL_FAMILY = "xxxxxxxhbboxhhithtxxxhhxvvexxbheboomxbbhxxbbpewtxcxceoxttaaobthbpxvtttgsvmpxogtgxaxiwfabxpxaaagJpexpxecghWbebtteghpexppcetaabxtbtbbboebxthxpaaLhchbavwpaaaRobbtxoohVxeGxhexawBgbccpvpnaxbpabxbxVegaaeappYpKcaetabxbaat";  const affinity = emoji => Object.entries(AFFINITIES).find(([, group]) => group.emoji.includes(emoji))?.[0] || "neutral";
   const counters = emoji => RADICALS.filter(radical => (RADICAL_INFO[radical]?.counters || []).includes(affinity(emoji)));
   const damageMultiplier = (emoji, radical) => RADICAL_INFO[radical]?.counters.includes(affinity(emoji)) ? 2.5 : 1;
   // Every radical has a real English name. Before, only the fourteen hand-written
@@ -84,11 +116,16 @@
   };
   // Radicals whose meaning drives the counter rules keep their meaning colour; the
   // rest get a stable, evenly spread hue so two attackers on screen never look alike.
-  const radicalColor = radical => {
-    if (RADICAL_COLORS[radical]) return RADICAL_COLORS[radical];
+  const radicalFamily = radical => {
     const index = RADICAL_INDEX.get(radical);
-    if (index === undefined) return "#53606b";
-    return `hsl(${(index * 137.508) % 360}deg 34% 42%)`;
+    return index === undefined ? null : RADICAL_FAMILIES[RADICAL_FAMILY[index]];
+  };
+  const radicalColor = radical => {
+    const family = radicalFamily(radical);
+    if (!family) return "hsl(218deg 10% 46%)";
+    const index = RADICAL_INDEX.get(radical);
+    const shift = ((index * 37) % 9 - 4) * 1.6;   // +/-6.4% lightness within the family
+    return `hsl(${family.h}deg ${family.s}% ${clamp(family.l + shift, 12, 88)}%)`;
   };
   const NAMES = ["Wobble", "Pip", "Sprig", "Mochi", "Bumble", "Peep", "Noodle", "Midge", "Tumble", "Bean", "Doodle", "Fizz"];
   const COLORS = ["#ffd47e", "#ffad91", "#a8d9a1", "#9bcaf2", "#d8b7ec", "#f6acc5"];

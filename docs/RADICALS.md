@@ -48,10 +48,24 @@ on `sans-serif` to resolve to something with Han coverage.
 
 ## Colours
 
-The radicals whose meaning drives the 2.5× counter rules keep their meaning
-colour (water blue, fire orange, tree green, and so on) in `RADICAL_COLORS`.
-The rest get a stable hue spaced by the golden angle, so any two radicals on
-screen are visually distinct and the same radical is always the same colour.
+Colour follows meaning. Every radical belongs to a family — water, fire, plant,
+earth, tool, animal, body, cloth, voice, spirit, shelter, motion and so on — and
+takes that family's hue, with a small per-radical shift in lightness so two in
+the same family are still told apart. `RADICAL_FAMILIES` holds the hues and
+`RADICAL_FAMILY` maps each radical to one, by index.
+
+Five radicals mean a colour, and get it: 赤 red, 黃 yellow, 黑 black, 白 white,
+靑 blue. 金 gold is a sixth — it heads the metal family but is drawn gold rather
+than steel, because that is what it means.
+
+This replaced a scheme where only fourteen radicals were coloured by hand and the
+other two hundred got a hue from golden-angle rotation, with no reference to
+meaning at all. It was not merely arbitrary: 赤 "red" came out purple, 黑 "black"
+came out yellow, 白 "white" came out orange and 靑 "blue" came out orange too.
+
+If you add or re-file a radical, keep the family honest rather than picking a
+colour you like — the point is that a player can tell water from fire across the
+field without reading the label.
 
 ## Roster rule
 
