@@ -456,7 +456,10 @@
         state.spawnLeft = 4 + state.wave * 2;
         state.spawnTimer = .4;
         updateUI(); renderOffers();
-        announce(`Level ${state.wave} — plant a new garden`);
+        const scene = BACKDROPS[backdropIndex(state.wave)];
+        announce(backdropIndex(state.wave) !== backdropIndex(state.wave - 1)
+          ? `${scene.name} — level ${state.wave}`
+          : `Level ${state.wave} — plant a new garden`);
       }
     } else if (state.spawnLeft > 0) {
       state.spawnTimer -= dt;
@@ -617,12 +620,229 @@
     for (let i = 0; i < amount; i++) state.particles.push({ x, y, color, vx: random(-70, 70), vy: random(-90, 15), life: random(.3, .7), size: random(2, 5) });
   }
 
+
+  // ---------------------------------------------------------------------------
+  // Backdrops. Four scenes that rotate every five levels, so a long run travels
+  // somewhere instead of staring at one gradient. All drawn in code - the game
+  // still ships no image assets.
+  //
+  // Every sky stays light on purpose. Radicals are mid-tone coloured glyphs and
+  // the garden is a row of small faces; a dramatic dark scene would look better
+  // in a screenshot and be worse to actually play on.
+  // ---------------------------------------------------------------------------
+  const BACKDROPS = [
+    // `far`/`mid`/`trim` dress the scene itself. `hills` and `grass` cover the
+    // ground, and are kept green in every scene whatever the theme colour is: the
+    // garden is a row of small plants and it has to read against what is under it.
+    { name: "Bamboo Garden", sky: ["#f6dcc0", "#f7ecd2", "#dcead2", "#a9c99f"],
+      far: "#c3d8b4", mid: "#8fb583", trim: "#6f9a67",
+      hills: ["#c3d8b4", "#8fb583"], grass: "#6f9a67", scene: "bamboo" },
+    { name: "Misty Peaks", sky: ["#f7d6d2", "#f3e2df", "#dfe8dd", "#aac6a6"],
+      far: "#cdd3e0", mid: "#a8b2c6", trim: "#7d8aa4",
+      hills: ["#c9dcc3", "#9bbd95"], grass: "#6f9a67", scene: "peaks" },
+    { name: "Rice Terraces", sky: ["#f8e6bd", "#f6eed4", "#dcecd0", "#a6c79c"],
+      far: "#cfdfae", mid: "#9dbd7f", trim: "#7ca063",
+      hills: ["#cfdfae", "#9dbd7f"], grass: "#7ca063", scene: "terraces" },
+    { name: "Blossom Grove", sky: ["#fadfe6", "#f8ecec", "#ddecdd", "#a9cbab"],
+      far: "#e6c6d2", mid: "#c79db0", trim: "#a87c90",
+      hills: ["#cfe0c6", "#a2c19d"], grass: "#7a9c78", scene: "blossom" },
+  ];
+  const LEVELS_PER_BACKDROP = 5;
+  const backdropIndex = wave => Math.floor((Math.max(1, wave) - 1) / LEVELS_PER_BACKDROP) % BACKDROPS.length;
+
+  // Scenery must not shuffle itself every frame, so its randomness is seeded from
+  // the scene rather than drawn fresh.
+  function seeded(seed) {
+    let value = (seed * 2654435761) >>> 0;
+    return () => (value = (value * 1664525 + 1013904223) >>> 0) / 4294967296;
+  }
+
+  function paintSky(pen, backdrop, w, h) {
+    const sky = pen.createLinearGradient(0, 0, 0, h);
+    sky.addColorStop(0, backdrop.sky[0]);
+    sky.addColorStop(GARDEN_TOP - .01, backdrop.sky[1]);
+    sky.addColorStop(GARDEN_TOP, backdrop.sky[2]);
+    sky.addColorStop(1, backdrop.sky[3]);
+    pen.fillStyle = sky;
+    pen.fillRect(0, 0, w, h);
+  }
+
+  // A soft hand-drawn ridge: a run of overlapping arcs rather than a straight line.
+  function ridge(pen, w, baseY, amplitude, bumps, colour, random) {
+    pen.fillStyle = colour;
+    pen.beginPath();
+    pen.moveTo(-10, h_of(baseY));
+    for (let i = 0; i <= bumps; i += 1) {
+      const x = (w + 20) * (i / bumps) - 10;
+      const y = h_of(baseY) - Math.abs(Math.sin(i * 1.7 + random() * 3)) * amplitude;
+      pen.quadraticCurveTo(x - (w / bumps) * .5, y - amplitude * .3, x, y);
+    }
+    pen.lineTo(w + 10, h_of(baseY) + 400);
+    pen.lineTo(-10, h_of(baseY) + 400);
+    pen.closePath();
+    pen.fill();
+    function h_of(v) { return v; }
+  }
+
+  function paintScene(pen, backdrop, w, h) {
+    paintSky(pen, backdrop, w, h);
+    const random = seeded(BACKDROPS.indexOf(backdrop) + 1);
+    const horizon = h * GARDEN_TOP;
+
+    if (backdrop.scene === "peaks") {
+      // Three ranks of peaks, palest at the back.
+      for (const [depth, alpha] of [[.62, .35], [.74, .55], [.86, .8]]) {
+        pen.globalAlpha = alpha;
+        pen.fillStyle = depth < .8 ? backdrop.far : backdrop.mid;
+        pen.beginPath();
+        pen.moveTo(-10, horizon);
+        let x = -10;
+        while (x < w + 40) {
+          const span = 70 + random() * 120, peak = 40 + random() * 90 * depth;
+          pen.lineTo(x + span / 2, horizon - peak * depth);
+          pen.lineTo(x + span, horizon);
+          x += span;
+        }
+        pen.lineTo(w + 40, horizon + 10); pen.lineTo(-10, horizon + 10);
+        pen.closePath(); pen.fill();
+      }
+      pen.globalAlpha = 1;
+    } else if (backdrop.scene === "terraces") {
+      // Stacked paddy steps curving away.
+      for (let step = 0; step < 5; step += 1) {
+        const y = horizon - step * (horizon * .12) - 6;
+        pen.globalAlpha = .28 + step * .1;
+        pen.fillStyle = step < 3 ? backdrop.far : backdrop.mid;
+        pen.beginPath();
+        pen.moveTo(-10, y + 26);
+        pen.quadraticCurveTo(w / 2, y - 14 - step * 3, w + 10, y + 26);
+        pen.lineTo(w + 10, y + 60); pen.lineTo(-10, y + 60);
+        pen.closePath(); pen.fill();
+      }
+      pen.globalAlpha = 1;
+    } else {
+      ridge(pen, w, horizon + 4, 26, 7, backdrop.hills[0], random);
+      ridge(pen, w, horizon + 16, 18, 5, backdrop.hills[1], random);
+    }
+
+    if (backdrop.scene === "bamboo") {
+      // Stalks down both edges, clear of the playfield.
+      for (const side of [0, 1]) {
+        for (let stalk = 0; stalk < 3; stalk += 1) {
+          const x = side ? w - 14 - stalk * 26 - random() * 10 : 14 + stalk * 26 + random() * 10;
+          const top = horizon * (.06 + random() * .2);
+          pen.globalAlpha = .5 - stalk * .1;
+          pen.strokeStyle = backdrop.trim;
+          pen.lineWidth = 7 - stalk;
+          pen.beginPath(); pen.moveTo(x, horizon + 30); pen.lineTo(x, top); pen.stroke();
+          pen.lineWidth = 2;
+          for (let node = top; node < horizon; node += 42) {
+            pen.beginPath(); pen.moveTo(x - 5, node); pen.lineTo(x + 5, node); pen.stroke();
+          }
+          for (let leaf = 0; leaf < 4; leaf += 1) {
+            const ly = top + 20 + leaf * 46, dir = leaf % 2 ? 1 : -1;
+            pen.beginPath();
+            pen.moveTo(x, ly);
+            pen.quadraticCurveTo(x + dir * 34, ly - 14, x + dir * 52, ly + 8);
+            pen.quadraticCurveTo(x + dir * 30, ly + 6, x, ly);
+            pen.fillStyle = backdrop.trim; pen.fill();
+          }
+        }
+      }
+      pen.globalAlpha = 1;
+    } else if (backdrop.scene === "blossom") {
+      // Two boughs reaching in from the top corners.
+      for (const side of [0, 1]) {
+        const rootX = side ? w + 10 : -10, dir = side ? -1 : 1;
+        pen.strokeStyle = backdrop.trim; pen.lineWidth = 9; pen.globalAlpha = .55;
+        pen.beginPath();
+        pen.moveTo(rootX, 10);
+        pen.quadraticCurveTo(rootX + dir * 110, 40, rootX + dir * 210, 22);
+        pen.stroke();
+        pen.globalAlpha = .5;
+        for (let i = 0; i < 14; i += 1) {
+          const t = random(), bx = rootX + dir * (30 + t * 190), by = 16 + random() * 44;
+          pen.fillStyle = "#f6c9d8";
+          pen.beginPath(); pen.arc(bx, by, 5 + random() * 5, 0, Math.PI * 2); pen.fill();
+        }
+      }
+      pen.globalAlpha = 1;
+    }
+
+    // Grass tufts along the ground, behind the planting rail.
+    pen.strokeStyle = backdrop.grass; pen.globalAlpha = .3; pen.lineWidth = 2;
+    for (let i = 0; i < 26; i += 1) {
+      const x = random() * w, y = horizon + 18 + random() * (h - horizon - 30);
+      pen.beginPath();
+      pen.moveTo(x, y);
+      pen.quadraticCurveTo(x + 3, y - 9, x + 7, y - 12);
+      pen.stroke();
+    }
+    pen.globalAlpha = 1;
+  }
+
+  // The static half of a scene is painted once and reused. Rebuilt only when the
+  // scene or the canvas size changes.
+  let sceneryCache = null, sceneryUsable = true;
+  function scenery(index, w, h) {
+    if (!sceneryUsable) return null;
+    const key = `${index}:${Math.round(w)}x${Math.round(h)}`;
+    if (sceneryCache && sceneryCache.key === key) return sceneryCache.canvas;
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(w));
+      canvas.height = Math.max(1, Math.round(h));
+      const pen = canvas.getContext("2d");
+      if (!pen || typeof pen.createLinearGradient !== "function") throw new Error("no 2d context");
+      paintScene(pen, BACKDROPS[index], w, h);
+      sceneryCache = { key, canvas };
+      return canvas;
+    } catch (_) {
+      // No offscreen canvas here (a test double, or a browser refusing one), so
+      // stop trying and let the caller paint the scene directly every frame.
+      sceneryUsable = false;
+      return null;
+    }
+  }
+
+  // The moving half: clouds that drift, and petals in the grove. Cheap on purpose.
+  function drawWeather(pen, backdrop, w, h, clock) {
+    const horizon = h * GARDEN_TOP;
+    const random = seeded(BACKDROPS.indexOf(backdrop) + 9);
+    pen.globalAlpha = .5;
+    pen.fillStyle = "#fffdf8";
+    for (let i = 0; i < 4; i += 1) {
+      const speed = 6 + random() * 10, size = 26 + random() * 26;
+      const drift = reducedMotion.matches ? 0 : clock * speed;
+      const x = ((random() * w + drift) % (w + 240)) - 120;
+      const y = horizon * (.1 + random() * .45);
+      pen.beginPath();
+      pen.ellipse(x, y, size, size * .48, 0, 0, Math.PI * 2);
+      pen.ellipse(x + size * .7, y + 5, size * .7, size * .38, 0, 0, Math.PI * 2);
+      pen.ellipse(x - size * .7, y + 6, size * .6, size * .34, 0, 0, Math.PI * 2);
+      pen.fill();
+    }
+    if (backdrop.scene === "blossom") {
+      pen.fillStyle = "#f3b9cd";
+      for (let i = 0; i < 14; i += 1) {
+        const fall = reducedMotion.matches ? random() * horizon : (clock * (14 + random() * 22) + random() * 900) % (horizon + 60);
+        const x = (random() * w + Math.sin(fall * .03 + i) * 18 + w) % w;
+        pen.globalAlpha = .55 * (1 - fall / (horizon + 60));
+        pen.beginPath();
+        pen.ellipse(x, fall, 4, 2.6, fall * .02, 0, Math.PI * 2);
+        pen.fill();
+      }
+    }
+    pen.globalAlpha = 1;
+  }
+
   function draw() {
     const w = width, h = height;
     ctx.clearRect(0, 0, w, h);
-    const gradient = ctx.createLinearGradient(0, 0, 0, h);
-    gradient.addColorStop(0, "#f2c9b1"); gradient.addColorStop(GARDEN_TOP - .01, "#f5e6c8"); gradient.addColorStop(GARDEN_TOP, "#dbe9d2"); gradient.addColorStop(1, "#a9c99f");
-    ctx.fillStyle = gradient; ctx.fillRect(0, 0, w, h);
+    const backdrop = BACKDROPS[backdropIndex(state.wave)];
+    const painted = scenery(backdropIndex(state.wave), w, h);
+    if (painted) ctx.drawImage(painted, 0, 0, w, h); else paintScene(ctx, backdrop, w, h);
+    drawWeather(ctx, backdrop, w, h, state.time);
     // One planting rail, with sixteen visible slots. No extra boundary/grid lines.
     const plantingY = h * (GARDEN_TOP + GARDEN_BOTTOM) / 2;
     ctx.strokeStyle = "#71966a"; ctx.lineWidth = 2; ctx.setLineDash([5, 7]);
